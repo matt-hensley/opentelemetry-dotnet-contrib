@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+* Add the `db.operation.name` attribute when `CommandType` is
+  `StoredProcedure` to conform to the new semantic conventions.
+  This affects you if you have opted into the new conventions.
+  ([#2800](https://github.com/open-telemetry/opentelemetry-dotnet-contrib/pull/2800))
+
+## 1.12.0-beta.1
+
+Released 2025-May-06
+
 * Fix issue where IPv6 addresses were improperly parsed from the the
   connection's `DataSource` when used to populate the `server.address`
   attribute.
@@ -15,6 +24,10 @@
 
 * Updated OpenTelemetry core component version(s) to `1.12.0`.
   ([#2725](https://github.com/open-telemetry/opentelemetry-dotnet-contrib/pull/2725))
+
+* Fixes an issue that throws `IndexOutOfRangeException` in `SqlProcessor` when the
+  SQL statement ends with the beginning of a keyword such as `UPDATE`.
+  ([#2674](https://github.com/open-telemetry/opentelemetry-dotnet-contrib/pull/2674))
 
 ## 1.11.0-beta.2
 
