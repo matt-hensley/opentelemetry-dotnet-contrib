@@ -115,6 +115,80 @@ public class MyDataAccessClass
 }
 ```
 
+### 3. Integrating with Dependency Injection
+
+If you are using a dependency injection (DI) container, you can register your `DbConnection` in such a way that it's automatically instrumented when resolved. Here's an example using `Microsoft.Extensions.DependencyInjection`:
+
+```csharp
+// In your Program.cs or Startup.cs
+
+// using Microsoft.Extensions.DependencyInjection;
+// using Microsoft.Extensions.Configuration; // For IConfiguration
+// using System.Data.Common;
+// using Microsoft.Data.Sqlite; // Example provider
+// using OpenTelemetry.Instrumentation.AdoNet;
+
+// ...
+
+// public void ConfigureServices(IServiceCollection services) // Or similar method
+// {
+//     // Assuming you have IConfiguration available for connection strings
+//     var configuration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
+//     var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+//     // Register your DbConnection (e.g., SqliteConnection)
+//     services.AddScoped<DbConnection>(sp =>
+//     {
+//         var originalConnection = new SqliteConnection(connectionString);
+
+//         // Get options configured via AddAdoNetInstrumentation, or create new ones.
+//         // Note: AdoNetInstrumentation.DefaultOptions is internal.
+//         // For a cleaner approach with DI-configured options, future enhancements to the library might be needed
+//         // to expose options more directly for this scenario.
+//         // For now, you can pass new options or rely on options set via AddAdoNetInstrumentation if they are globally available
+//         // (though direct access to AdoNetInstrumentation.DefaultOptions isn't public).
+//         // The simplest is to let AddAdoNetInstrumentation handle global defaults.
+//         // If AddAdoNetInstrumentation was called, its configured options (if any) will be used by default.
+
+//         var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(originalConnection /*, pass explicit options here if needed */);
+
+//         // It's important that the DI container does NOT dispose the instrumentedConnection
+//         // if the underlying originalConnection is also managed/disposed by the DI container elsewhere
+//         // or if the scope of originalConnection is meant to be different.
+//         // Typically, for DbConnection, you resolve it, use it, and dispose it within a short scope.
+//         // The example above assumes the DbConnection is resolved and used per-scope (e.g., per HTTP request).
+//         // The `using var instrumentedConnection = ...` pattern shown in earlier examples is often within a method scope.
+
+//         return instrumentedConnection;
+//     });
+
+//     // You could also register a specific type like SqliteConnection:
+//     // services.AddScoped<SqliteConnection>(sp =>
+//     // {
+//     //     var connectionString = sp.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection");
+//     //     var originalConnection = new SqliteConnection(connectionString);
+//     //     // AdoNetInstrumentation.InstrumentConnection returns DbConnection, so cast if needed,
+//     //     // or ensure your InstrumentedDbConnection can be cast or is derived appropriately if you need the specific type.
+//     //     // However, AdoNetInstrumentation.InstrumentConnection returns the base DbConnection type.
+//     //     // So, for specific types, you might need a slightly different approach or accept DbConnection.
+//     //     return (SqliteConnection)AdoNetInstrumentation.InstrumentConnection(originalConnection);
+//     // });
+//     // For the above SqliteConnection example, it's better to register as DbConnection
+//     // and resolve DbConnection in your services, as InstrumentConnection returns a DbConnection.
+
+//     // Your other services...
+// }
+```
+
+When your services resolve `DbConnection`, they will receive an instrumented version if it was configured as above.
+
+**Important Considerations for DI:**
+*   **Connection Lifetime:** Be mindful of the lifetime of your `DbConnection` in the DI container (`Scoped`, `Transient`, `Singleton`). `Scoped` (e.g., per HTTP request) is common for database connections. The `InstrumentedDbConnection` will wrap the original connection; ensure their lifetimes are managed correctly. The instrumented connection should generally have the same lifetime as the original connection it wraps.
+*   **Options with DI:** If you configure `AdoNetInstrumentationOptions` via `AddAdoNetInstrumentation()`, those will be the default options used by `InstrumentConnection()` if no options are explicitly passed to it. If you need different options for connections resolved via DI, you can pass an `AdoNetInstrumentationOptions` instance directly to `InstrumentConnection` within your DI setup code.
+*   **Disposal:** The `InstrumentedDbConnection` disposes the wrapped `DbConnection` when it itself is disposed. Ensure your DI container's disposal behavior aligns with this. If the DI container disposes the `DbConnection`, the instrumented wrapper will handle disposing the underlying connection.
+
+This example shows one way to integrate. Depending on your DI framework and patterns, other approaches might also be suitable. The key is that `AdoNetInstrumentation.InstrumentConnection()` is called with the `DbConnection` instance you want to instrument.
+
 ## Configuration Options (`AdoNetInstrumentationOptions`)
 
 You can configure the instrumentation behavior using `AdoNetInstrumentationOptions`. These options can be set when calling `AddAdoNetInstrumentation()` on the `TracerProviderBuilder` or directly when calling `AdoNetInstrumentation.InstrumentConnection()`. Options passed directly to `InstrumentConnection` take precedence.
