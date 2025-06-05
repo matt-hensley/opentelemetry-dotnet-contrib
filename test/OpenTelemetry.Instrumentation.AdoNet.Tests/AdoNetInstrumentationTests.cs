@@ -15,41 +15,22 @@ using System.Threading.Tasks;
 
 namespace OpenTelemetry.Instrumentation.AdoNet.Tests
 {
-    public class AdoNetInstrumentationTests : IDisposable
+    public class AdoNetInstrumentationTests
     {
-        private readonly SqliteConnection inMemorySqliteConnection;
-        private TracerProvider? tracerProvider;
-        private List<Activity>? exportedActivities;
-
-        public AdoNetInstrumentationTests()
-        {
-            this.inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
-            this.inMemorySqliteConnection.Open(); // Open the connection for the test duration
-        }
-
-        public void Dispose()
-        {
-            this.inMemorySqliteConnection.Close();
-            this.inMemorySqliteConnection.Dispose();
-            this.tracerProvider?.Dispose();
-            GC.SuppressFinalize(this);
-        }
-
-        private void SetupTracerProvider(Action<AdoNetInstrumentationOptions>? configureOptions = null)
-        {
-            this.exportedActivities = new List<Activity>();
-            this.tracerProvider = Sdk.CreateTracerProviderBuilder()
-                .AddAdoNetInstrumentation(configureOptions)
-                .AddInMemoryExporter(this.exportedActivities)
-                .Build();
-        }
-
         [Fact]
         public void ExecuteNonQuery_CreatesActivity()
         {
             // Arrange
-            SetupTracerProvider();
-            using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+            var exportedActivities = new List<Activity>();
+            using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                .AddAdoNetInstrumentation()
+                .AddInMemoryExporter(exportedActivities)
+                .Build();
+
+            using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+            inMemorySqliteConnection.Open();
+
+            using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
             using var command = instrumentedConnection.CreateCommand();
             command.CommandText = "CREATE TABLE IF NOT EXISTS TestTable (Id INTEGER PRIMARY KEY);";
 
@@ -57,15 +38,15 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             command.ExecuteNonQuery();
 
             // Assert
-            Assert.NotNull(this.exportedActivities);
-            Assert.Single(this.exportedActivities);
-            var activity = this.exportedActivities[0];
+            Assert.NotNull(exportedActivities);
+            Assert.Single(exportedActivities);
+            var activity = exportedActivities[0];
 
-            Assert.Equal($"{this.inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteNonQuery)}", activity.DisplayName);
+            Assert.Equal($"{inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteNonQuery)}", activity.DisplayName);
             Assert.Equal(ActivityKind.Client, activity.Kind);
             Assert.Equal("sqlite", activity.GetTagItem(SemanticConventions.AttributeDbSystem));
-            Assert.Equal(this.inMemorySqliteConnection.Database, activity.GetTagItem(SemanticConventions.AttributeDbName));
-            Assert.Equal(this.inMemorySqliteConnection.DataSource, activity.GetTagItem(SemanticConventions.AttributeNetPeerName));
+            Assert.Equal(inMemorySqliteConnection.Database, activity.GetTagItem(SemanticConventions.AttributeDbName));
+            Assert.Equal(inMemorySqliteConnection.DataSource, activity.GetTagItem(SemanticConventions.AttributeNetPeerName));
             Assert.Equal(command.CommandText, activity.GetTagItem(SemanticConventions.AttributeDbStatement));
             Assert.Equal(nameof(DbCommand.ExecuteNonQuery), activity.GetTagItem(SemanticConventions.AttributeDbOperation));
             Assert.Equal(ActivityStatusCode.Ok, activity.Status);
@@ -75,15 +56,23 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
         public void ExecuteScalar_CreatesActivity()
         {
             // Arrange
-            SetupTracerProvider();
-            using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+            var exportedActivities = new List<Activity>();
+            using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                .AddAdoNetInstrumentation()
+                .AddInMemoryExporter(exportedActivities)
+                .Build();
+
+            using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+            inMemorySqliteConnection.Open();
+
+            using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
             // Ensure table exists
             using (var setupCmd = instrumentedConnection.CreateCommand())
             {
                 setupCmd.CommandText = "CREATE TABLE IF NOT EXISTS ScalarTest (Value INT); INSERT INTO ScalarTest (Value) VALUES (123);";
                 setupCmd.ExecuteNonQuery();
             }
-            this.exportedActivities?.Clear(); // Clear setup activity
+            exportedActivities.Clear(); // Clear setup activity
 
             using var command = instrumentedConnection.CreateCommand();
             command.CommandText = "SELECT Value FROM ScalarTest WHERE Value = 123;";
@@ -93,11 +82,11 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
 
             // Assert
             Assert.Equal(123L, result); // Sqlite returns Int64 for INTEGER
-            Assert.NotNull(this.exportedActivities);
-            Assert.Single(this.exportedActivities);
-            var activity = this.exportedActivities[0];
+            Assert.NotNull(exportedActivities);
+            Assert.Single(exportedActivities);
+            var activity = exportedActivities[0];
 
-            Assert.Equal($"{this.inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteScalar)}", activity.DisplayName);
+            Assert.Equal($"{inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteScalar)}", activity.DisplayName);
             Assert.Equal("sqlite", activity.GetTagItem(SemanticConventions.AttributeDbSystem));
             Assert.Equal(command.CommandText, activity.GetTagItem(SemanticConventions.AttributeDbStatement));
             Assert.Equal(nameof(DbCommand.ExecuteScalar), activity.GetTagItem(SemanticConventions.AttributeDbOperation));
@@ -108,19 +97,25 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
         public void ExecuteReader_CreatesActivity_AndStopsOnReaderClose()
         {
             // Arrange
-            SetupTracerProvider();
-            using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+            var exportedActivities = new List<Activity>();
+            using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                .AddAdoNetInstrumentation()
+                .AddInMemoryExporter(exportedActivities)
+                .Build();
+
+            using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+            inMemorySqliteConnection.Open();
+
+            using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
             using (var setupCmd = instrumentedConnection.CreateCommand()) // Ensure table and data
             {
                 setupCmd.CommandText = "CREATE TABLE IF NOT EXISTS ReaderTest (Id INT); INSERT INTO ReaderTest (Id) VALUES (1);";
                 setupCmd.ExecuteNonQuery();
             }
-            this.exportedActivities?.Clear();
+            exportedActivities.Clear();
 
             using var command = instrumentedConnection.CreateCommand();
             command.CommandText = "SELECT Id FROM ReaderTest;";
-
-            Activity? readerActivity = null;
 
             // Act
             using (var reader = command.ExecuteReader())
@@ -128,18 +123,16 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 Assert.True(reader.Read());
                 Assert.Equal(1, reader.GetInt32(0));
 
-                // Activity should not be stopped yet
-
                 // Activity is started but not yet exported to InMemoryExporter
-                Assert.Empty(this.exportedActivities!);
+                Assert.Empty(exportedActivities!);
             } // Reader is closed/disposed here, activity should be stopped and exported
 
             // Assert
-            Assert.NotNull(this.exportedActivities);
-            Assert.Single(this.exportedActivities);
-            var activity = this.exportedActivities[0];
+            Assert.NotNull(exportedActivities);
+            Assert.Single(exportedActivities);
+            var activity = exportedActivities[0];
 
-            Assert.Equal($"{this.inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteReader)}", activity.DisplayName);
+            Assert.Equal($"{inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteReader)}", activity.DisplayName);
             Assert.Equal("sqlite", activity.GetTagItem(SemanticConventions.AttributeDbSystem));
             Assert.Equal(command.CommandText, activity.GetTagItem(SemanticConventions.AttributeDbStatement));
             Assert.Equal(nameof(DbCommand.ExecuteReader), activity.GetTagItem(SemanticConventions.AttributeDbOperation));
@@ -151,17 +144,25 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public void ExecuteNonQuery_WhenExceptionOccurs_ActivityRecordsException()
             {
                 // Arrange
-                SetupTracerProvider(options => options.RecordException = true); // Enable exception recording
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation(options => options.RecordException = true) // Enable exception recording
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "INSERT INTO NonExistentTable (Id) VALUES (1);"; // This will fail
 
                 // Act & Assert
                 Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
 
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
 
                 Assert.Equal(ActivityStatusCode.Error, activity.Status);
                 Assert.Contains("SQLite Error 1: 'no such table: NonExistentTable'", activity.StatusDescription);
@@ -177,8 +178,16 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public void CommandTypeStoredProcedure_CreatesActivityWithCommandTextAsStatement()
             {
                 // Arrange
-                SetupTracerProvider();
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation()
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using var command = instrumentedConnection.CreateCommand();
                 // Sqlite doesn't really have stored procedures in the same way as SQL Server.
                 // We're testing that CommandText is used as db.statement when CommandType is StoredProcedure.
@@ -204,9 +213,9 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
 
 
                 // Assert
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
 
                 Assert.Equal("MyTestProcedure", activity.GetTagItem(SemanticConventions.AttributeDbStatement));
                 Assert.Equal(nameof(DbCommand.ExecuteNonQuery), activity.GetTagItem(SemanticConventions.AttributeDbOperation)); // or the operation that was called
@@ -218,11 +227,19 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public void FilterOption_PreventsActivityCreation()
             {
                 // Arrange
-                SetupTracerProvider(options =>
-                {
-                    options.Filter = (cmd) => !cmd.CommandText.Contains("SKIP_THIS");
-                });
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation(options =>
+                    {
+                        options.Filter = (cmd) => !cmd.CommandText.Contains("SKIP_THIS");
+                    })
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
 
                 // Command that should be filtered out
                 using (var commandToSkip = instrumentedConnection.CreateCommand())
@@ -239,9 +256,9 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 }
 
                 // Assert
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities); // Only one activity should be present
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities); // Only one activity should be present
+                var activity = exportedActivities[0];
                 Assert.Equal("SELECT 'INSTRUMENT_THIS';", activity.GetTagItem(SemanticConventions.AttributeDbStatement));
             }
 
@@ -251,16 +268,23 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 // Arrange
                 var customTagName = "my.custom.tag";
                 var customTagValue = "custom.value";
-                SetupTracerProvider(options =>
-                {
-                    options.Enrich = (activity, command) =>
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation(options =>
                     {
-                        activity.SetTag(customTagName, customTagValue);
-                        activity.SetTag("db.command.type", command.CommandType.ToString());
-                    };
-                });
+                        options.Enrich = (activity, command) =>
+                        {
+                            activity.SetTag(customTagName, customTagValue);
+                            activity.SetTag("db.command.type", command.CommandType.ToString());
+                        };
+                    })
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
 
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "SELECT 1;";
                 command.CommandType = CommandType.Text; // Explicitly set for the test
@@ -269,9 +293,9 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 command.ExecuteScalar();
 
                 // Assert
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
                 Assert.Equal(customTagValue, activity.GetTagItem(customTagName));
                 Assert.Equal(CommandType.Text.ToString(), activity.GetTagItem("db.command.type"));
             }
@@ -281,8 +305,16 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             {
                 // Arrange
                 var overrideDbSystem = "testdb";
-                SetupTracerProvider(options => options.DbSystem = overrideDbSystem);
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation(options => options.DbSystem = overrideDbSystem)
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "SELECT 1;";
 
@@ -290,9 +322,9 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 command.ExecuteScalar();
 
                 // Assert
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
                 Assert.Equal(overrideDbSystem, activity.GetTagItem(SemanticConventions.AttributeDbSystem));
             }
 
@@ -300,8 +332,16 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public async Task ExecuteNonQueryAsync_CreatesActivity()
             {
                 // Arrange
-                SetupTracerProvider();
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation()
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "CREATE TABLE IF NOT EXISTS AsyncTestTable (Id INTEGER PRIMARY KEY);";
 
@@ -309,11 +349,11 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 await command.ExecuteNonQueryAsync();
 
                 // Assert
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
 
-                Assert.Equal($"{this.inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteNonQueryAsync)}", activity.DisplayName);
+                Assert.Equal($"{inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteNonQueryAsync)}", activity.DisplayName);
                 Assert.Equal(ActivityKind.Client, activity.Kind);
                 Assert.Equal("sqlite", activity.GetTagItem(SemanticConventions.AttributeDbSystem));
                 Assert.Equal(command.CommandText, activity.GetTagItem(SemanticConventions.AttributeDbStatement));
@@ -325,14 +365,22 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public async Task ExecuteReaderAsync_CreatesActivity_AndStopsOnReaderClose()
             {
                 // Arrange
-                SetupTracerProvider();
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation()
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using (var setupCmd = instrumentedConnection.CreateCommand())
                 {
                     setupCmd.CommandText = "CREATE TABLE IF NOT EXISTS AsyncReaderTest (Id INT); INSERT INTO AsyncReaderTest (Id) VALUES (1);";
                     await setupCmd.ExecuteNonQueryAsync();
                 }
-                this.exportedActivities?.Clear();
+                exportedActivities.Clear();
 
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "SELECT Id FROM AsyncReaderTest;";
@@ -343,15 +391,15 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                     Assert.True(await reader.ReadAsync());
                     Assert.Equal(1, reader.GetInt32(0));
                     // Activity is started but not yet exported to InMemoryExporter
-                    Assert.Empty(this.exportedActivities!);
+                    Assert.Empty(exportedActivities!);
                 } // Reader is closed/disposed here
 
                 // Assert
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
 
-                Assert.Equal($"{this.inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteReaderAsync)}", activity.DisplayName);
+                Assert.Equal($"{inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteReaderAsync)}", activity.DisplayName);
                 // ... rest of assertions are the same as the synchronous version
                 Assert.Equal("sqlite", activity.GetTagItem(SemanticConventions.AttributeDbSystem));
                 Assert.Equal(command.CommandText, activity.GetTagItem(SemanticConventions.AttributeDbStatement));
@@ -364,14 +412,22 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public async Task ExecuteScalarAsync_CreatesActivity()
             {
                 // Arrange
-                SetupTracerProvider();
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation()
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using (var setupCmd = instrumentedConnection.CreateCommand())
                 {
                     setupCmd.CommandText = "CREATE TABLE IF NOT EXISTS AsyncScalarTest (Value INT); INSERT INTO AsyncScalarTest (Value) VALUES (456);";
                     await setupCmd.ExecuteNonQueryAsync();
                 }
-                this.exportedActivities?.Clear();
+                exportedActivities.Clear();
 
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "SELECT Value FROM AsyncScalarTest WHERE Value = 456;";
@@ -381,11 +437,11 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
 
                 // Assert
                 Assert.Equal(456L, result); // Sqlite returns Int64
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
 
-                Assert.Equal($"{this.inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteScalarAsync)}", activity.DisplayName);
+                Assert.Equal($"{inMemorySqliteConnection.Database}.{nameof(DbCommand.ExecuteScalarAsync)}", activity.DisplayName);
                 Assert.Equal("sqlite", activity.GetTagItem(SemanticConventions.AttributeDbSystem));
                 Assert.Equal(command.CommandText, activity.GetTagItem(SemanticConventions.AttributeDbStatement));
                 Assert.Equal(nameof(DbCommand.ExecuteScalarAsync), activity.GetTagItem(SemanticConventions.AttributeDbOperation));
@@ -399,8 +455,16 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public void SetDbStatementForText_False_DoesNotSetDbStatementTag()
             {
                 // Arrange
-                SetupTracerProvider(options => options.SetDbStatementForText = false);
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation(options => options.SetDbStatementForText = false)
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "SELECT 1;";
                 command.CommandType = CommandType.Text;
@@ -409,9 +473,9 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 command.ExecuteScalar();
 
                 // Assert
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
                 Assert.Null(activity.GetTagItem(SemanticConventions.AttributeDbStatement));
                 Assert.Equal("sqlite", activity.GetTagItem(SemanticConventions.AttributeDbSystem)); // Other tags should still be present
             }
@@ -420,17 +484,25 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public void RecordException_False_DoesNotRecordExceptionEvent()
             {
                 // Arrange
-                SetupTracerProvider(options => options.RecordException = false); // Default is false, but explicitly set for clarity
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                var exportedActivities = new List<Activity>();
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation(options => options.RecordException = false) // Default is false, but explicitly set for clarity
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "INSERT INTO NonExistentTable (Id) VALUES (1);"; // This will fail
 
                 // Act & Assert
                 Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
 
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
 
                 Assert.Equal(ActivityStatusCode.Error, activity.Status); // Status should still be Error
                 Assert.Contains("SQLite Error 1: 'no such table: NonExistentTable'", activity.StatusDescription);
@@ -444,18 +516,26 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             public void DefaultOptions_RecordException_False_DoesNotRecordExceptionEvent()
             {
                 // Arrange
+                var exportedActivities = new List<Activity>();
                 // Uses default options where RecordException is false.
-                SetupTracerProvider();
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection);
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation()
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
+
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection);
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "INSERT INTO AnotherNonExistentTable (Id) VALUES (1);";
 
                 // Act & Assert
                 Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
 
-                Assert.NotNull(this.exportedActivities);
-                Assert.Single(this.exportedActivities);
-                var activity = this.exportedActivities[0];
+                Assert.NotNull(exportedActivities);
+                Assert.Single(exportedActivities);
+                var activity = exportedActivities[0];
 
                 Assert.Equal(ActivityStatusCode.Error, activity.Status);
                 var exceptionEvent = activity.Events.FirstOrDefault(e => e.Name == "exception");
@@ -467,14 +547,21 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             {
                 // Arrange
                 var testDbSystem = "customsqlite";
+                var exportedActivities = new List<Activity>();
                 // Configure options via builder
-                SetupTracerProvider(options => {
-                    options.DbSystem = testDbSystem;
-                    options.RecordException = true; // Change a default to see it applied
-                });
+                using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                    .AddAdoNetInstrumentation(options => {
+                        options.DbSystem = testDbSystem;
+                        options.RecordException = true; // Change a default to see it applied
+                    })
+                    .AddInMemoryExporter(exportedActivities)
+                    .Build();
+
+                using var inMemorySqliteConnection = new SqliteConnection("Data Source=:memory:");
+                inMemorySqliteConnection.Open();
 
                 // Pass null (or no) options to InstrumentConnection
-                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this.inMemorySqliteConnection, null);
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(inMemorySqliteConnection, null);
 
                 using var command = instrumentedConnection.CreateCommand();
                 command.CommandText = "SELECT 1;";
@@ -489,13 +576,13 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
 
 
                 // Assert
-                Assert.NotNull(this.exportedActivities);
-                Assert.Equal(2, this.exportedActivities.Count);
+                Assert.NotNull(exportedActivities);
+                Assert.Equal(2, exportedActivities.Count);
 
-                var activity1 = this.exportedActivities[0];
+                var activity1 = exportedActivities[0];
                 Assert.Equal(testDbSystem, activity1.GetTagItem(SemanticConventions.AttributeDbSystem));
 
-                var activity2 = this.exportedActivities[1];
+                var activity2 = exportedActivities[1];
                 Assert.Equal(testDbSystem, activity2.GetTagItem(SemanticConventions.AttributeDbSystem));
                 Assert.Equal(ActivityStatusCode.Error, activity2.Status);
                 Assert.NotNull(activity2.Events.FirstOrDefault(e => e.Name == "exception")); // RecordException was true

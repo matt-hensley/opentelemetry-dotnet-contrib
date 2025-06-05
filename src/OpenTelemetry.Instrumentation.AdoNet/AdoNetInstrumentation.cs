@@ -7,32 +7,39 @@ using System.Data.Common;
 namespace OpenTelemetry.Instrumentation.AdoNet
 {
     /// <summary>
-    /// Provides static methods to instrument ADO.NET connections and configure default options.
+    /// Provides static methods to instrument ADO.NET <see cref="DbConnection"/> instances.
     /// </summary>
     public static class AdoNetInstrumentation
     {
         internal static AdoNetInstrumentationOptions? DefaultOptions { get; private set; }
 
         /// <summary>
-        /// Configures the default <see cref="AdoNetInstrumentationOptions"/> for ADO.NET instrumentation.
-        /// These options will be used when <see cref="InstrumentConnection(DbConnection, AdoNetInstrumentationOptions)"/>
-        /// is called without explicit options.
+        /// Sets the default <see cref="AdoNetInstrumentationOptions"/> to be used when calling
+        /// <see cref="InstrumentConnection(DbConnection, AdoNetInstrumentationOptions)"/>
+        /// without explicitly providing options.
         /// </summary>
-        /// <param name="options">The default options to set.</param>
+        /// <param name="options">The <see cref="AdoNetInstrumentationOptions"/> to use as default.</param>
         internal static void SetDefaultOptions(AdoNetInstrumentationOptions options)
         {
-            DefaultOptions = options;
+            DefaultOptions = options ?? throw new ArgumentNullException(nameof(options));
         }
 
         /// <summary>
-        /// Wraps an existing <see cref="DbConnection"/> with OpenTelemetry instrumentation.
-        /// If <paramref name="options"/> are not provided, default options configured via
-        /// <c>TracerProviderBuilder.AddAdoNetInstrumentation()</c> will be used.
+        /// Wraps the given <see cref="DbConnection"/> with OpenTelemetry instrumentation.
         /// </summary>
-        /// <param name="connection">The <see cref="DbConnection"/> to instrument.</param>
-        /// <param name="options">Optional <see cref="AdoNetInstrumentationOptions"/> to configure the instrumentation.</param>
-        /// <returns>An instrumented <see cref="DbConnection"/>.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="connection"/> is null.</exception>
+        /// <remarks>
+        /// The returned <see cref="DbConnection"/> will be an instrumented wrapper around the original <paramref name="connection"/>.
+        /// All operations performed on the instrumented connection that result in database calls (e.g., <see cref="DbCommand.ExecuteNonQuery()"/>,
+        /// <see cref="DbCommand.ExecuteReader()"/>) will create <see cref="Activity"/> instances to trace the duration and outcome of the call.
+        /// If <paramref name="options"/> are not provided, the default options configured via
+        /// <see cref="TracerProviderBuilderExtensions.AddAdoNetInstrumentation(OpenTelemetry.Trace.TracerProviderBuilder, Action{AdoNetInstrumentationOptions})"/>
+        /// will be used. If no default options have been set, default <see cref="AdoNetInstrumentationOptions"/> will be used.
+        /// It is the caller's responsibility to manage the lifetime of the returned <see cref="DbConnection"/>, including opening, closing, and disposing it.
+        /// </remarks>
+        /// <param name="connection">The <see cref="DbConnection"/> to instrument. Must not be null.</param>
+        /// <param name="options">Optional <see cref="AdoNetInstrumentationOptions"/> to configure the behavior of the instrumentation for this specific connection.</param>
+        /// <returns>An instrumented <see cref="DbConnection"/> that wraps the original connection.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="connection"/> is <see langword="null"/>.</exception>
         public static DbConnection InstrumentConnection(DbConnection connection, AdoNetInstrumentationOptions? options = null)
         {
             if (connection == null)

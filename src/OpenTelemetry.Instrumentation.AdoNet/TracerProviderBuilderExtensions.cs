@@ -8,40 +8,42 @@ using OpenTelemetry.Internal; // For Guard
 namespace OpenTelemetry.Trace
 {
     /// <summary>
-    /// Extension methods to simplify registering ADO.NET instrumentation.
+    /// Extension methods to simplify registration of ADO.NET instrumentation.
     /// </summary>
     public static class TracerProviderBuilderExtensions
     {
         /// <summary>
-        /// Enables ADO.NET instrumentation.
+        /// Enables ADO.NET data provider instrumentation.
         /// </summary>
         /// <remarks>
-        /// This method configures default options for ADO.NET instrumentation.
-        /// Connections must still be manually wrapped using
-        /// <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>
-        /// for instrumentation to occur. The configured options will be applied to such manually instrumented connections
-        /// if no explicit options are provided to the <c>InstrumentConnection</c> method.
+        /// This method establishes default <see cref="AdoNetInstrumentationOptions"/> for all <see cref="System.Data.Common.DbConnection"/>
+        /// instances instrumented via <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>.
+        /// These default options are used when no specific options are provided to the <c>InstrumentConnection</c> method.
+        /// Note that ADO.NET instrumentation still requires connections to be manually wrapped using
+        /// <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>.
+        /// This setup method primarily configures the shared <see cref="ActivitySource"/> and default behaviors.
         /// </remarks>
         /// <param name="builder"><see cref="TracerProviderBuilder"/> being configured.</param>
-        /// <returns>The instance of <see cref="TracerProviderBuilder"/> to chain the calls.</returns>
+        /// <returns>The instance of <see cref="TracerProviderBuilder"/> to chain calls.</returns>
         public static TracerProviderBuilder AddAdoNetInstrumentation(this TracerProviderBuilder builder)
         {
             return AddAdoNetInstrumentation(builder, configure: null);
         }
 
         /// <summary>
-        /// Enables ADO.NET instrumentation.
+        /// Enables ADO.NET data provider instrumentation with custom configuration.
         /// </summary>
         /// <remarks>
-        /// This method configures specified options for ADO.NET instrumentation.
-        /// Connections must still be manually wrapped using
-        /// <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>
-        /// for instrumentation to occur. The configured options will be applied to such manually instrumented connections
-        /// if no explicit options are provided to the <c>InstrumentConnection</c> method.
+        /// This method establishes specified <see cref="AdoNetInstrumentationOptions"/> as defaults for all <see cref="System.Data.Common.DbConnection"/>
+        /// instances instrumented via <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>.
+        /// These options are used when no specific options are provided to the <c>InstrumentConnection</c> method.
+        /// Note that ADO.NET instrumentation still requires connections to be manually wrapped using
+        /// <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>.
+        /// This setup method primarily configures the shared <see cref="ActivitySource"/> and default behaviors.
         /// </remarks>
         /// <param name="builder"><see cref="TracerProviderBuilder"/> being configured.</param>
-        /// <param name="configure">Callback action to configure the <see cref="AdoNetInstrumentationOptions"/>.</param>
-        /// <returns>The instance of <see cref="TracerProviderBuilder"/> to chain the calls.</returns>
+        /// <param name="configure">A callback action to configure the <see cref="AdoNetInstrumentationOptions"/>.</param>
+        /// <returns>The instance of <see cref="TracerProviderBuilder"/> to chain calls.</returns>
         public static TracerProviderBuilder AddAdoNetInstrumentation(
             this TracerProviderBuilder builder,
             Action<AdoNetInstrumentationOptions>? configure)
