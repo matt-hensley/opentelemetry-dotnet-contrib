@@ -11,12 +11,17 @@ namespace OpenTelemetry.Instrumentation.AdoNet
     /// </summary>
     public static class AdoNetInstrumentation
     {
+        /// <summary>
+        /// Gets the globally configured default <see cref="AdoNetInstrumentationOptions"/>.
+        /// These options are typically set via <see cref="Otel.TracerProviderBuilderExtensions.AddAdoNetInstrumentation(Otel.TracerProviderBuilder, Action{AdoNetInstrumentationOptions})"/>.
+        /// </summary>
         internal static AdoNetInstrumentationOptions? DefaultOptions { get; private set; }
 
         /// <summary>
         /// Sets the default <see cref="AdoNetInstrumentationOptions"/> to be used when calling
         /// <see cref="InstrumentConnection(DbConnection, AdoNetInstrumentationOptions)"/>
-        /// without explicitly providing options.
+        /// without explicitly providing options. This method is typically called by the
+        /// <see cref="Otel.TracerProviderBuilderExtensions.AddAdoNetInstrumentation(Otel.TracerProviderBuilder, Action{AdoNetInstrumentationOptions})"/> extension.
         /// </summary>
         /// <param name="options">The <see cref="AdoNetInstrumentationOptions"/> to use as default.</param>
         internal static void SetDefaultOptions(AdoNetInstrumentationOptions options)
@@ -30,14 +35,22 @@ namespace OpenTelemetry.Instrumentation.AdoNet
         /// <remarks>
         /// The returned <see cref="DbConnection"/> will be an instrumented wrapper around the original <paramref name="connection"/>.
         /// All operations performed on the instrumented connection that result in database calls (e.g., <see cref="DbCommand.ExecuteNonQuery()"/>,
-        /// <see cref="DbCommand.ExecuteReader()"/>) will create <see cref="Activity"/> instances to trace the duration and outcome of the call.
-        /// If <paramref name="options"/> are not provided, the default options configured via
-        /// <see cref="TracerProviderBuilderExtensions.AddAdoNetInstrumentation(OpenTelemetry.Trace.TracerProviderBuilder, Action{AdoNetInstrumentationOptions})"/>
-        /// will be used. If no default options have been set, default <see cref="AdoNetInstrumentationOptions"/> will be used.
+        /// <see cref="DbCommand.ExecuteReader()"/>) will create <see cref="System.Diagnostics.Activity"/> instances and optionally record metrics.
+        ///
+        /// Options precedence for instrumentation is as follows:
+        /// 1. If <paramref name="options"/> are provided to this method, they are used.
+        /// 2. If <paramref name="options"/> are null, the static <see cref="DefaultOptions"/> are used. These are typically configured by
+        ///    <see cref="Otel.TracerProviderBuilderExtensions.AddAdoNetInstrumentation(Otel.TracerProviderBuilder, Action{AdoNetInstrumentationOptions})"/>.
+        /// 3. If <see cref="DefaultOptions"/> are also null (e.g., if `AddAdoNetInstrumentation` was not called or was called without an options delegate),
+        ///    a new instance of <see cref="AdoNetInstrumentationOptions"/> with default values is used.
+        ///
         /// It is the caller's responsibility to manage the lifetime of the returned <see cref="DbConnection"/>, including opening, closing, and disposing it.
         /// </remarks>
         /// <param name="connection">The <see cref="DbConnection"/> to instrument. Must not be null.</param>
-        /// <param name="options">Optional <see cref="AdoNetInstrumentationOptions"/> to configure the behavior of the instrumentation for this specific connection.</param>
+        /// <param name="options">
+        /// Optional <see cref="AdoNetInstrumentationOptions"/> to configure the behavior of the instrumentation for this specific connection.
+        /// If null, <see cref="DefaultOptions"/> will be used if previously configured, otherwise default options will be applied.
+        /// </param>
         /// <returns>An instrumented <see cref="DbConnection"/> that wraps the original connection.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="connection"/> is <see langword="null"/>.</exception>
         public static DbConnection InstrumentConnection(DbConnection connection, AdoNetInstrumentationOptions? options = null)

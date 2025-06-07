@@ -17,16 +17,17 @@ Add the NuGet package to your project:
 dotnet add package OpenTelemetry.Instrumentation.AdoNet
 ```
 
-## Usage
+## Manual Instrumentation Setup
 
 The ADO.NET instrumentation works by wrapping your existing `DbConnection` objects. You need to explicitly instrument your connections using the `AdoNetInstrumentation.InstrumentConnection` method.
 
-### 1. Enable ADO.NET Instrumentation in your TracerProvider
+### 1. Enable ADO.NET Instrumentation in your TracerProvider and MeterProvider
 
-First, you need to add ADO.NET instrumentation to your `TracerProvider` configuration.
+First, you need to add ADO.NET instrumentation to your `TracerProvider` and `MeterProvider` configurations.
 
 ```csharp
 using OpenTelemetry.Trace;
+using OpenTelemetry.Metrics; // For MeterProvider
 using System.Data.Common; // For DbConnection
 using Microsoft.Data.Sqlite; // Example provider
 
@@ -35,18 +36,28 @@ using Microsoft.Data.Sqlite; // Example provider
 public static class TelemetryConfig
 {
     public static TracerProvider? MyTracerProvider;
+    public static MeterProvider? MyMeterProvider;
 
     public static void Initialize()
     {
+        // Configure options once, can be shared or customized per use case
+        Action<AdoNetInstrumentationOptions> configureAdoNetOptions = options =>
+        {
+            options.SetDbStatementForText = true;
+            options.RecordException = true;
+            options.EmitMetrics = true; // Ensure metrics are enabled
+        };
+
         MyTracerProvider = Sdk.CreateTracerProviderBuilder()
             .AddSource("MyApplicationActivitySource") // Your application's activity source
-            .AddAdoNetInstrumentation(options =>
-            {
-                // Configure options (see below)
-                options.SetDbStatementForText = true;
-                options.RecordException = true;
-            })
+            .AddAdoNetInstrumentation(configureAdoNetOptions) // Configure default options for traces & metrics
             // Add other sources, resource configurations, and exporters (e.g., Console, OTLP)
+            .AddConsoleExporter()
+            .Build();
+
+        MyMeterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddAdoNetInstrumentationMetrics() // Enable the ADO.NET meter
+            // Add other meters and exporters
             .AddConsoleExporter()
             .Build();
     }
@@ -78,12 +89,12 @@ public class MyDataAccessClass
         // Create your original connection
         using var originalConnection = new SqliteConnection(_connectionString);
 
-        // Instrument the connection
+        // Instrument the connection.
+        // If AddAdoNetInstrumentation was called with options, those are used by default.
         using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(originalConnection);
-        // Or, if you configured options via AddAdoNetInstrumentation, this is enough:
-        // using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(originalConnection);
-        // Or, provide specific options here:
-        // using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(originalConnection, new AdoNetInstrumentationOptions { DbSystem = "custom_sqlite" });
+        // Or, provide specific options here to override defaults for this instance:
+        // using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(originalConnection,
+        //     new AdoNetInstrumentationOptions { DbSystem = "custom_sqlite", EmitMetrics = false });
 
 
         instrumentedConnection.Open();
@@ -115,83 +126,149 @@ public class MyDataAccessClass
 }
 ```
 
-### 3. Integrating with Dependency Injection
+## Automatic Instrumentation Setup (DI and DbProviderFactories)
 
-If you are using a dependency injection (DI) container, you can register your `DbConnection` in such a way that it's automatically instrumented when resolved. Here's an example using `Microsoft.Extensions.DependencyInjection`:
+While connections can always be manually instrumented using `AdoNetInstrumentation.InstrumentConnection()`, this library also provides helpers for more integrated setup, especially when using Dependency Injection (DI) or `DbProviderFactories`.
+
+### Using with Dependency Injection (`Microsoft.Extensions.DependencyInjection`)
+
+If you are using `Microsoft.Extensions.DependencyInjection`, you can register instrumented ADO.NET components.
+
+**1. Configure ADO.NET Instrumentation Options:**
+First, configure the default or named options for ADO.NET instrumentation in your `IServiceCollection`.
 
 ```csharp
-// In your Program.cs or Startup.cs
-
+// In Program.cs or Startup.cs
 // using Microsoft.Extensions.DependencyInjection;
-// using Microsoft.Extensions.Configuration; // For IConfiguration
-// using System.Data.Common;
-// using Microsoft.Data.Sqlite; // Example provider
 // using OpenTelemetry.Instrumentation.AdoNet;
+
+services.ConfigureAdoNetInstrumentation(options =>
+{
+    options.SetDbStatementForText = true;
+    options.RecordException = true;
+    options.EmitMetrics = true;
+    // options.DbSystem = "your_db_system"; // Optionally override db.system
+});
+
+// For named options:
+// services.ConfigureAdoNetInstrumentation("MySpecificDatabase", options => { /* ... */ });
+```
+
+**2. Register Instrumented Components:**
+
+*   **Instrumented `DbConnection`:**
+    Register a factory delegate that provides an instrumented `DbConnection`. This is useful when you resolve `DbConnection` directly.
+
+    ```csharp
+    // using System.Data.Common;
+    // using Microsoft.Data.Sqlite;
+    // using Microsoft.Extensions.Options; // For Options.DefaultName
+
+    services.AddInstrumentedDbConnection(
+        sp => new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:"), // Your factory for the original connection
+        optionsName: Microsoft.Extensions.Options.Options.DefaultName, // Or your named options instance
+        lifetime: ServiceLifetime.Scoped // Typical lifetime for DbConnection
+    );
+
+    // Example usage in a service:
+    // public class MyService(DbConnection connection) { ... }
+    ```
+
+*   **Instrumented `DbProviderFactory`:**
+    Register an instrumented version of a `DbProviderFactory` for a specific provider invariant name.
+
+    ```csharp
+    // using System.Data.Common;
+    // using Microsoft.Extensions.Options; // For Options.DefaultName
+
+    // Ensure the underlying provider factory is registered if needed by your application or DbProviderFactories.
+    // For some providers like Microsoft.Data.Sqlite, SqliteFactory.Instance can be used.
+    // try { DbProviderFactories.RegisterFactory("Microsoft.Data.Sqlite", Microsoft.Data.Sqlite.SqliteFactory.Instance); } catch (ArgumentException) { /* May already be registered */ }
+
+
+    services.AddInstrumentedDbProviderFactory(
+        "Microsoft.Data.Sqlite", // Provider Invariant Name
+        optionsName: Microsoft.Extensions.Options.Options.DefaultName, // Or your named options
+        lifetime: ServiceLifetime.Singleton // Typical lifetime for DbProviderFactory
+    );
+
+    // Example usage in a service:
+    // public class MyFactoryUserService(DbProviderFactory factory)
+    // {
+    //     public void DoWork()
+    //     {
+    //         using var connection = factory.CreateConnection(); // This will be an instrumented connection
+    //         connection.ConnectionString = "Data Source=:memory:";
+    //         // ...
+    //     }
+    // }
+    ```
+
+**3. Ensure OpenTelemetry is Configured:**
+Remember to also add the ADO.NET instrumentation to your OpenTelemetry `TracerProvider` and `MeterProvider` setup:
+
+```csharp
+// using OpenTelemetry.Trace;
+// using OpenTelemetry.Metrics;
+
+services.AddOpenTelemetry()
+    .WithTracing(builder => builder
+        .AddAdoNetInstrumentation() // This adds the ActivitySource. Options are picked from DI by instrumented components.
+        // ... other trace configurations ...
+    )
+    .WithMetrics(builder => builder
+        .AddAdoNetInstrumentationMetrics() // This adds the Meter.
+        // ... other metric configurations ...
+    );
+```
+The DI-registered factories for `DbConnection` and `DbProviderFactory` will resolve the configured `AdoNetInstrumentationOptions` from the DI container and pass them to `AdoNetInstrumentation.InstrumentConnection()` or `InstrumentedDbProviderFactory` respectively. The `AddAdoNetInstrumentation()` (for tracing) and `AddAdoNetInstrumentationMetrics()` builder extensions primarily ensure the ActivitySource and Meter are enabled in the OpenTelemetry SDK.
+
+### Using with `DbProviderFactories` (Manual Wrapping)
+
+If your application retrieves `DbProviderFactory` instances directly using `DbProviderFactories.GetFactory(providerInvariantName)`, you can instrument these by wrapping the factory:
+
+1.  **Get the original factory.**
+2.  **Create an `AdoNetInstrumentationOptions` instance** (or retrieve one configured via DI if `IServiceProvider` is accessible, or use options configured via `AddAdoNetInstrumentation` on `TracerProviderBuilder` which sets `AdoNetInstrumentation.DefaultOptions`).
+3.  **Create an `InstrumentedDbProviderFactory`**.
+
+```csharp
+using System.Data.Common;
+using OpenTelemetry.Instrumentation.AdoNet;
 
 // ...
 
-// public void ConfigureServices(IServiceCollection services) // Or similar method
-// {
-//     // Assuming you have IConfiguration available for connection strings
-//     var configuration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
-//     var connectionString = configuration.GetConnectionString("DefaultConnection");
+string providerName = "Microsoft.Data.Sqlite"; // Or from config
+DbProviderFactory originalFactory = DbProviderFactories.GetFactory(providerName);
 
-//     // Register your DbConnection (e.g., SqliteConnection)
-//     services.AddScoped<DbConnection>(sp =>
-//     {
-//         var originalConnection = new SqliteConnection(connectionString);
+// Configure options (e.g., programmatically or from IOptions if in DI context)
+var adoNetOptions = new AdoNetInstrumentationOptions
+{
+    SetDbStatementForText = true,
+    EmitMetrics = true
+    // DbSystem can be set here to override auto-detection if needed
+};
+// Alternatively, if AddAdoNetInstrumentation(options => ...) was called for TracerProviderBuilder:
+// var adoNetOptions = AdoNetInstrumentation.DefaultOptions ?? new AdoNetInstrumentationOptions();
 
-//         // Get options configured via AddAdoNetInstrumentation, or create new ones.
-//         // Note: AdoNetInstrumentation.DefaultOptions is internal.
-//         // For a cleaner approach with DI-configured options, future enhancements to the library might be needed
-//         // to expose options more directly for this scenario.
-//         // For now, you can pass new options or rely on options set via AddAdoNetInstrumentation if they are globally available
-//         // (though direct access to AdoNetInstrumentation.DefaultOptions isn't public).
-//         // The simplest is to let AddAdoNetInstrumentation handle global defaults.
-//         // If AddAdoNetInstrumentation was called, its configured options (if any) will be used by default.
 
-//         var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(originalConnection /*, pass explicit options here if needed */);
+DbProviderFactory instrumentedFactory = new InstrumentedDbProviderFactory(originalFactory, adoNetOptions);
 
-//         // It's important that the DI container does NOT dispose the instrumentedConnection
-//         // if the underlying originalConnection is also managed/disposed by the DI container elsewhere
-//         // or if the scope of originalConnection is meant to be different.
-//         // Typically, for DbConnection, you resolve it, use it, and dispose it within a short scope.
-//         // The example above assumes the DbConnection is resolved and used per-scope (e.g., per HTTP request).
-//         // The `using var instrumentedConnection = ...` pattern shown in earlier examples is often within a method scope.
-
-//         return instrumentedConnection;
-//     });
-
-//     // You could also register a specific type like SqliteConnection:
-//     // services.AddScoped<SqliteConnection>(sp =>
-//     // {
-//     //     var connectionString = sp.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection");
-//     //     var originalConnection = new SqliteConnection(connectionString);
-//     //     // AdoNetInstrumentation.InstrumentConnection returns DbConnection, so cast if needed,
-//     //     // or ensure your InstrumentedDbConnection can be cast or is derived appropriately if you need the specific type.
-//     //     // However, AdoNetInstrumentation.InstrumentConnection returns the base DbConnection type.
-//     //     // So, for specific types, you might need a slightly different approach or accept DbConnection.
-//     //     return (SqliteConnection)AdoNetInstrumentation.InstrumentConnection(originalConnection);
-//     // });
-//     // For the above SqliteConnection example, it's better to register as DbConnection
-//     // and resolve DbConnection in your services, as InstrumentConnection returns a DbConnection.
-
-//     // Your other services...
-// }
+// Now use instrumentedFactory to create connections
+using (DbConnection connection = instrumentedFactory.CreateConnection())
+{
+    // This connection will be instrumented
+    if (connection != null)
+    {
+        connection.ConnectionString = "Data Source=:memory:";
+        // ...
+    }
+}
 ```
-
-When your services resolve `DbConnection`, they will receive an instrumented version if it was configured as above.
-
-**Important Considerations for DI:**
-*   **Connection Lifetime:** Be mindful of the lifetime of your `DbConnection` in the DI container (`Scoped`, `Transient`, `Singleton`). `Scoped` (e.g., per HTTP request) is common for database connections. The `InstrumentedDbConnection` will wrap the original connection; ensure their lifetimes are managed correctly. The instrumented connection should generally have the same lifetime as the original connection it wraps.
-*   **Options with DI:** If you configure `AdoNetInstrumentationOptions` via `AddAdoNetInstrumentation()`, those will be the default options used by `InstrumentConnection()` if no options are explicitly passed to it. If you need different options for connections resolved via DI, you can pass an `AdoNetInstrumentationOptions` instance directly to `InstrumentConnection` within your DI setup code.
-*   **Disposal:** The `InstrumentedDbConnection` disposes the wrapped `DbConnection` when it itself is disposed. Ensure your DI container's disposal behavior aligns with this. If the DI container disposes the `DbConnection`, the instrumented wrapper will handle disposing the underlying connection.
-
-This example shows one way to integrate. Depending on your DI framework and patterns, other approaches might also be suitable. The key is that `AdoNetInstrumentation.InstrumentConnection()` is called with the `DbConnection` instance you want to instrument.
+This approach still requires you to manage the `InstrumentedDbProviderFactory` instance. The DI approach above is generally preferred for applications already using DI.
 
 ## Configuration Options (`AdoNetInstrumentationOptions`)
 
-You can configure the instrumentation behavior using `AdoNetInstrumentationOptions`. These options can be set when calling `AddAdoNetInstrumentation()` on the `TracerProviderBuilder` or directly when calling `AdoNetInstrumentation.InstrumentConnection()`. Options passed directly to `InstrumentConnection` take precedence.
+You can configure the instrumentation behavior using `AdoNetInstrumentationOptions`. These options can be set when calling `AddAdoNetInstrumentation()` on the `TracerProviderBuilder` (which sets global `AdoNetInstrumentation.DefaultOptions`), via DI using `ConfigureAdoNetInstrumentation()`, or directly when calling `AdoNetInstrumentation.InstrumentConnection()`. Options passed directly to `InstrumentConnection` take precedence over DI-resolved options for that specific instance, which in turn take precedence over `AdoNetInstrumentation.DefaultOptions`.
 
 *   **`DbSystem`**: `string?` (Default: auto-detected)
     *   Allows you to explicitly set the value for the `db.system` semantic tag.
@@ -214,6 +291,10 @@ You can configure the instrumentation behavior using `AdoNetInstrumentationOptio
 *   **`RecordException`**: `bool` (Default: `false`)
     *   If `true`, `DbException`s encountered during command execution will be recorded as an event on the activity, including exception type, message, and stack trace. The activity status will always be set to `Error` regardless of this option if an exception occurs.
     *   Example: `options.RecordException = true;`
+
+*   **`EmitMetrics`**: `bool` (Default: `true`)
+    *   Gets or sets a value indicating whether ADO.NET client metrics should be collected.
+    *   Example: `options.EmitMetrics = false;`
 
 *   **`Filter`**: `Func<DbCommand, bool>?` (Default: `null`, all commands are instrumented)
     *   A predicate that is called before a command is instrumented. If the predicate returns `false`, the command will not be instrumented (no activity will be created).
@@ -241,14 +322,17 @@ In addition to traces, this instrumentation can also collect metrics about ADO.N
 
 To enable metrics collection, you need to:
 
-1.  **Configure `AdoNetInstrumentationOptions`**: Ensure the `EmitMetrics` option is set to `true` (which is the default). You can configure this when calling `AddAdoNetInstrumentation()` for your `TracerProviderBuilder`:
+1.  **Configure `AdoNetInstrumentationOptions`**: Ensure the `EmitMetrics` option is set to `true` (which is the default). You can configure this when calling `AddAdoNetInstrumentation()` for your `TracerProviderBuilder` or when using DI:
     ```csharp
-    // In your TracerProvider setup
+    // Example with TracerProviderBuilder
     .AddAdoNetInstrumentation(options =>
     {
         options.EmitMetrics = true; // Default is true, but can be explicitly set
         // ... other trace options
     })
+
+    // Example with DI (IServiceCollection)
+    // services.ConfigureAdoNetInstrumentation(options => options.EmitMetrics = true);
     ```
 
 2.  **Add ADO.NET Instrumentation to `MeterProviderBuilder`**:
@@ -300,8 +384,9 @@ This instrumentation aims to capture the following semantic conventions for data
 ## Troubleshooting
 
 *   **No telemetry is captured**:
-    *   Ensure you have registered `AddAdoNetInstrumentation()` with your `TracerProviderBuilder`.
-    *   Verify that you are wrapping your `DbConnection` instances with `AdoNetInstrumentation.InstrumentConnection()`.
+    *   Ensure you have registered `AddAdoNetInstrumentation()` with your `TracerProviderBuilder` (for traces) and `AddAdoNetInstrumentationMetrics()` with your `MeterProviderBuilder` (for metrics).
+    *   Verify that you are wrapping your `DbConnection` instances with `AdoNetInstrumentation.InstrumentConnection()` or using the DI registration helpers.
     *   Check if your `Filter` option might be excluding the commands you expect to see.
     *   Confirm your OpenTelemetry SDK is correctly configured with an exporter and is processing telemetry.
+    *   If using DI, ensure `AdoNetInstrumentationOptions` (especially `EmitMetrics`) are correctly configured and resolved.
 ```

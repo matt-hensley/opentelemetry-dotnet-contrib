@@ -13,15 +13,16 @@ namespace OpenTelemetry.Trace
     public static class TracerProviderBuilderExtensions
     {
         /// <summary>
-        /// Enables ADO.NET data provider instrumentation.
+        /// Enables ADO.NET data provider instrumentation for tracing.
         /// </summary>
         /// <remarks>
-        /// This method establishes default <see cref="AdoNetInstrumentationOptions"/> for all <see cref="System.Data.Common.DbConnection"/>
-        /// instances instrumented via <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>.
-        /// These default options are used when no specific options are provided to the <c>InstrumentConnection</c> method.
-        /// Note that ADO.NET instrumentation still requires connections to be manually wrapped using
-        /// <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>.
-        /// This setup method primarily configures the shared <see cref="ActivitySource"/> and default behaviors.
+        /// This method registers the ADO.NET instrumentation's <see cref="System.Diagnostics.ActivitySource"/> with the <see cref="TracerProviderBuilder"/>.
+        /// It ensures that activities created by instrumented ADO.NET connections are processed by the OpenTelemetry SDK.
+        /// This overload does not configure any <see cref="AdoNetInstrumentationOptions"/>. If options need to be configured (e.g., for trace enrichment,
+        /// filtering, or controlling metric emission), use the overload <see cref="AddAdoNetInstrumentation(TracerProviderBuilder, Action{AdoNetInstrumentationOptions})"/>
+        /// or configure options via Dependency Injection using <c>IServiceCollection.ConfigureAdoNetInstrumentation</c>.
+        /// Connections still need to be manually wrapped using
+        /// <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/> for instrumentation to occur.
         /// </remarks>
         /// <param name="builder"><see cref="TracerProviderBuilder"/> being configured.</param>
         /// <returns>The instance of <see cref="TracerProviderBuilder"/> to chain calls.</returns>
@@ -31,18 +32,22 @@ namespace OpenTelemetry.Trace
         }
 
         /// <summary>
-        /// Enables ADO.NET data provider instrumentation with custom configuration.
+        /// Enables ADO.NET data provider instrumentation for tracing with custom configuration.
         /// </summary>
         /// <remarks>
-        /// This method establishes specified <see cref="AdoNetInstrumentationOptions"/> as defaults for all <see cref="System.Data.Common.DbConnection"/>
-        /// instances instrumented via <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>.
-        /// These options are used when no specific options are provided to the <c>InstrumentConnection</c> method.
-        /// Note that ADO.NET instrumentation still requires connections to be manually wrapped using
-        /// <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>.
-        /// This setup method primarily configures the shared <see cref="ActivitySource"/> and default behaviors.
+        /// This method registers the ADO.NET instrumentation's <see cref="System.Diagnostics.ActivitySource"/> with the <see cref="TracerProviderBuilder"/>
+        /// and configures the static <see cref="AdoNetInstrumentation.DefaultOptions"/>. These <see cref="AdoNetInstrumentation.DefaultOptions"/>
+        /// are used as a fallback when <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>
+        /// is called without explicit options, or when options are not resolved from Dependency Injection.
+        /// If options are configured via Dependency Injection (e.g., using <c>IServiceCollection.ConfigureAdoNetInstrumentation</c>),
+        /// those DI-configured options will typically take precedence when <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/>
+        /// is used within a DI scope or if <see cref="Otel.Instrumentation.AdoNet.InstrumentedDbProviderFactory"/> is resolved from DI.
+        /// Connections still need to be manually wrapped using
+        /// <see cref="AdoNetInstrumentation.InstrumentConnection(System.Data.Common.DbConnection, AdoNetInstrumentationOptions)"/> for instrumentation to occur.
         /// </remarks>
         /// <param name="builder"><see cref="TracerProviderBuilder"/> being configured.</param>
-        /// <param name="configure">A callback action to configure the <see cref="AdoNetInstrumentationOptions"/>.</param>
+        /// <param name="configure">A callback action to configure the <see cref="AdoNetInstrumentationOptions"/>. These options are set as the
+        /// static <see cref="AdoNetInstrumentation.DefaultOptions"/>.</param>
         /// <returns>The instance of <see cref="TracerProviderBuilder"/> to chain calls.</returns>
         public static TracerProviderBuilder AddAdoNetInstrumentation(
             this TracerProviderBuilder builder,
