@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenTelemetry.Trace; // Required for SemanticConventions and Activity an Status
+using OpenTelemetry.Instrumentation.AdoNet.Implementation;
 
 namespace OpenTelemetry.Instrumentation.AdoNet
 {
@@ -160,17 +161,7 @@ namespace OpenTelemetry.Instrumentation.AdoNet
         /// <returns>The database system string.</returns>
         private string GetDbSystem()
         {
-            if (!string.IsNullOrEmpty(this.options.DbSystem))
-            {
-                return this.options.DbSystem;
-            }
-            // Basic heuristic, can be expanded
-            var connectionType = this.instrumentedConnection.WrappedConnection.GetType().Name;
-            if (connectionType.Contains("SqlConnection")) return SemanticConventions.DbSystemMsSql; // "mssql"
-            if (connectionType.Contains("NpgsqlConnection")) return SemanticConventions.DbSystemPostgreSql; // "postgresql"
-            if (connectionType.Contains("MySqlConnection")) return SemanticConventions.DbSystemMySql; // "mysql"
-            if (connectionType.Contains("SqliteConnection")) return SemanticConventions.DbSystemSqlite; // "sqlite"
-            return "other"; // Fallback for unknown connection types.
+            return DbSystemResolver.Resolve(this.instrumentedConnection.WrappedConnection, this.options.DbSystem);
         }
 
         // DbCommand Overrides

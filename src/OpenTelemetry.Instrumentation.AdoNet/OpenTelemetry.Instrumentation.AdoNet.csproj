@@ -17,6 +17,10 @@
     <PackageReference Include="System.Data.Common" Version="4.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OpenTelemetry.Instrumentation.AdoNet.Tests" />
+  </ItemGroup>
+
   <!-- TODO: Add any necessary build props or targets from other instrumentation projects -->
 
 </Project>

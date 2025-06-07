@@ -193,8 +193,18 @@ This example shows one way to integrate. Depending on your DI framework and patt
 
 You can configure the instrumentation behavior using `AdoNetInstrumentationOptions`. These options can be set when calling `AddAdoNetInstrumentation()` on the `TracerProviderBuilder` or directly when calling `AdoNetInstrumentation.InstrumentConnection()`. Options passed directly to `InstrumentConnection` take precedence.
 
-*   **`DbSystem`**: `string?` (Default: auto-detected based on connection type, e.g., "mssql", "postgresql", "sqlite")
-    *   Allows you to explicitly set the value for the `db.system` semantic tag. Useful if auto-detection is not accurate for your provider.
+*   **`DbSystem`**: `string?` (Default: auto-detected)
+    *   Allows you to explicitly set the value for the `db.system` semantic tag.
+    *   If not set, the instrumentation attempts to automatically determine the `db.system` value based on the `DbConnection` type. Recognized systems include:
+        *   `mssql` (for System.Data.SqlClient and Microsoft.Data.SqlClient)
+        *   `postgresql` (for Npgsql)
+        *   `mysql` (for MySql.Data and MySqlConnector)
+        *   `oracle` (for Oracle.ManagedDataAccess.Client)
+        *   `sqlite` (for Microsoft.Data.Sqlite and System.Data.SQLite)
+        *   `db2` (for IBM.Data.DB2 drivers)
+        *   `firebird` (for FirebirdSql.Data.FirebirdClient)
+    *   If the provider is not recognized, a heuristic based on the connection type name is used. If still unresolved, it defaults to `"other"`.
+    *   Setting this property provides an explicit value, overriding any auto-detection.
     *   Example: `options.DbSystem = "custom_db";`
 
 *   **`SetDbStatementForText`**: `bool` (Default: `true`)
@@ -259,7 +269,7 @@ The following metrics are collected if `EmitMetrics` is enabled:
 *   **`db.client.duration`** (Histogram, Unit: `ms`)
     *   Description: Measures the duration of database client operations.
     *   Tags/Attributes:
-        *   `db.system`: (e.g., `sqlite`, `mssql`)
+        *   `db.system`: Auto-detected or user-configured identifier for the DBMS (see `DbSystem` option for details).
         *   `db.name`: Name of the database.
         *   `server.address`: Network address of the database server.
         *   `db.operation`: The name of the ADO.NET operation (e.g., `ExecuteNonQuery`, `ExecuteReader`).
@@ -268,17 +278,17 @@ The following metrics are collected if `EmitMetrics` is enabled:
 *   **`db.client.calls`** (Counter, Unit: `{call}`)
     *   Description: Counts the number of database client calls.
     *   Tags/Attributes: (Same as `db.client.duration`)
-        *   `db.system`
-        *   `db.name`
-        *   `server.address`
-        *   `db.operation`
-        *   `error.type` (Only if an error occurred)
+        *   `db.system`: Auto-detected or user-configured identifier for the DBMS (see `DbSystem` option for details).
+        *   `db.name`: Name of the database.
+        *   `server.address`: Network address of the database server.
+        *   `db.operation`: The name of the ADO.NET operation (e.g., `ExecuteNonQuery`, `ExecuteReader`).
+        *   `error.type`: (Only if an error occurred) The type name of the exception (e.g., `SqliteException`).
 
 ## Captured Trace Attributes
 
 This instrumentation aims to capture the following semantic conventions for database client spans:
 
-*   **`db.system`**: An identifier for the database management system (DBMS) being used (e.g., `mssql`, `postgresql`, `mysql`, `sqlite`).
+*   **`db.system`**: An identifier for the database management system (DBMS) being used. The value is auto-detected for common providers (e.g., `mssql`, `postgresql`, `mysql`, `oracle`, `sqlite`, `db2`, `firebird`) and can be overridden using the `AdoNetInstrumentationOptions.DbSystem` setting. See the `DbSystem` option description for more details on recognized providers.
 *   **`db.name`**: The name of the database being accessed.
 *   **`db.statement`**: The database statement being executed (if `SetDbStatementForText` is true). For `CommandType.StoredProcedure`, this will be the name of the stored procedure.
 *   **`db.operation`**: The name of the operation being performed (e.g., `ExecuteNonQuery`, `ExecuteReader`, `ExecuteScalar`).
