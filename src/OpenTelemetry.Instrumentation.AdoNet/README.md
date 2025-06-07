@@ -223,7 +223,58 @@ You can configure the instrumentation behavior using `AdoNetInstrumentationOptio
         };
         ```
 
-## Captured Telemetry
+## Metrics
+
+In addition to traces, this instrumentation can also collect metrics about ADO.NET client operations.
+
+### Enabling Metrics
+
+To enable metrics collection, you need to:
+
+1.  **Configure `AdoNetInstrumentationOptions`**: Ensure the `EmitMetrics` option is set to `true` (which is the default). You can configure this when calling `AddAdoNetInstrumentation()` for your `TracerProviderBuilder`:
+    ```csharp
+    // In your TracerProvider setup
+    .AddAdoNetInstrumentation(options =>
+    {
+        options.EmitMetrics = true; // Default is true, but can be explicitly set
+        // ... other trace options
+    })
+    ```
+
+2.  **Add ADO.NET Instrumentation to `MeterProviderBuilder`**:
+    In your `MeterProvider` setup, call the `AddAdoNetInstrumentationMetrics()` extension method:
+    ```csharp
+    // In your MeterProvider setup
+    Sdk.CreateMeterProviderBuilder()
+        .AddAdoNetInstrumentationMetrics()
+        // Add other meters and exporters (e.g., Console, OTLP)
+        .AddConsoleExporter()
+        .Build();
+    ```
+
+### Collected Metrics
+
+The following metrics are collected if `EmitMetrics` is enabled:
+
+*   **`db.client.duration`** (Histogram, Unit: `ms`)
+    *   Description: Measures the duration of database client operations.
+    *   Tags/Attributes:
+        *   `db.system`: (e.g., `sqlite`, `mssql`)
+        *   `db.name`: Name of the database.
+        *   `server.address`: Network address of the database server.
+        *   `db.operation`: The name of the ADO.NET operation (e.g., `ExecuteNonQuery`, `ExecuteReader`).
+        *   `error.type`: (Only if an error occurred) The type name of the exception (e.g., `SqliteException`).
+
+*   **`db.client.calls`** (Counter, Unit: `{call}`)
+    *   Description: Counts the number of database client calls.
+    *   Tags/Attributes: (Same as `db.client.duration`)
+        *   `db.system`
+        *   `db.name`
+        *   `server.address`
+        *   `db.operation`
+        *   `error.type` (Only if an error occurred)
+
+## Captured Trace Attributes
 
 This instrumentation aims to capture the following semantic conventions for database client spans:
 

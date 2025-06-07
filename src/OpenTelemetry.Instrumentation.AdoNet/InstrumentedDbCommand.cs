@@ -110,12 +110,9 @@ namespace OpenTelemetry.Instrumentation.AdoNet
         /// Otherwise, the <see cref="Activity.Status"/> is set to <see cref="ActivityStatusCode.Ok"/>.
         /// The activity is then disposed.
         /// </remarks>
-        private void StopActivity(Activity? activity, Exception? exception = null)
+        private void StopActivity(Activity? activity, Exception? exception)
         {
-            if (activity == null)
-            {
-                return;
-            }
+            if (activity == null) return;
 
             if (exception != null)
             {
@@ -124,14 +121,37 @@ namespace OpenTelemetry.Instrumentation.AdoNet
                 {
                     activity.RecordException(exception);
                 }
-                // TODO: Consider adding Enrich option call for exceptions, e.g., this.options.EnrichWithException?.Invoke(activity, exception);
+                // TODO: Enrich on exception for activity
             }
             else
             {
                 activity.SetStatus(ActivityStatusCode.Ok);
             }
-
             activity.Dispose();
+        }
+
+        private void RecordMetrics(string operationName, long startTimestamp, Exception? exception)
+        {
+            if (!this.options.EmitMetrics || startTimestamp == 0) return;
+
+            var duration = (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency; // ms
+
+            var tags = new TagList();
+            tags.Add(SemanticConventions.AttributeDbSystem, GetDbSystem());
+            if (!string.IsNullOrEmpty(this.instrumentedConnection.Database))
+                tags.Add(SemanticConventions.AttributeDbName, this.instrumentedConnection.Database);
+            if (!string.IsNullOrEmpty(this.instrumentedConnection.DataSource))
+                tags.Add(SemanticConventions.AttributeServerAddress, this.instrumentedConnection.DataSource);
+
+            tags.Add(SemanticConventions.AttributeDbOperation, operationName);
+
+            if (exception != null)
+            {
+                tags.Add(SemanticConventions.AttributeErrorType, exception.GetType().Name);
+            }
+
+            InstrumentedDbConnection.DbClientDurationHistogram.Record(duration, tags);
+            InstrumentedDbConnection.DbClientCallsCounter.Add(1, tags);
         }
 
         /// <summary>
@@ -181,18 +201,13 @@ namespace OpenTelemetry.Instrumentation.AdoNet
             get => this.instrumentedConnection;
             set
             {
-                // This setter should ideally not be called with a different connection.
-                // If it is, we can't guarantee instrumentation.
-                // For now, let's update the wrapped command's connection.
-                // A more robust solution might involve disallowing this or re-wrapping.
                 if (value is InstrumentedDbConnection newInstrumentedConnection)
                 {
                     this.wrappedCommand.Connection = newInstrumentedConnection.WrappedConnection;
-                    // this.instrumentedConnection = newInstrumentedConnection; // This would change the parent connection instance
                 }
                 else
                 {
-                    this.wrappedCommand.Connection = value; // Set on wrapped command if not an instrumented connection.
+                    this.wrappedCommand.Connection = value;
                 }
             }
         }
@@ -233,67 +248,83 @@ namespace OpenTelemetry.Instrumentation.AdoNet
         /// <inheritdoc/>
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
-            var activity = StartActivity(nameof(ExecuteDbDataReader)); // Activity can be null
+            var operationName = "ExecuteDbDataReader";
+            Activity? activity = null;
+            long startTimestamp = 0;
+
+            if (this.options.EmitMetrics)
+            {
+                startTimestamp = Stopwatch.GetTimestamp();
+            }
+            activity = StartActivity(operationName);
+
             try
             {
                 var reader = this.wrappedCommand.ExecuteReader(behavior);
-                // Pass the activity and options to the reader wrapper
+                RecordMetrics(operationName, startTimestamp, null);
                 return new InstrumentedDbDataReader(reader, activity, this.options);
             }
             catch (Exception ex)
             {
-                // If an exception occurs before reader is created/returned, stop activity here
-                if (activity != null)
-                {
-                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    if (this.options.RecordException)
-                    {
-                        activity.RecordException(ex);
-                    }
-                    // TODO: Enrich on exception
-                    activity.Dispose();
-                }
+                RecordMetrics(operationName, startTimestamp, ex);
+                StopActivity(activity, ex);
                 throw;
             }
-            // The activity's lifecycle is now managed by the returned InstrumentedDbDataReader.
-            // It will be stopped when the reader is disposed.
         }
 
         /// <inheritdoc/>
         public override int ExecuteNonQuery()
         {
-            var activity = StartActivity(nameof(ExecuteNonQuery));
+            var operationName = "ExecuteNonQuery";
+            Activity? activity = null;
+            long startTimestamp = 0;
+
+            if (this.options.EmitMetrics)
+            {
+                startTimestamp = Stopwatch.GetTimestamp();
+            }
+            activity = StartActivity(operationName);
+
             try
             {
-                return this.wrappedCommand.ExecuteNonQuery();
+                var result = this.wrappedCommand.ExecuteNonQuery();
+                RecordMetrics(operationName, startTimestamp, null);
+                StopActivity(activity, null);
+                return result;
             }
             catch (Exception ex)
             {
+                RecordMetrics(operationName, startTimestamp, ex);
                 StopActivity(activity, ex);
                 throw;
-            }
-            finally
-            {
-                StopActivity(activity);
             }
         }
 
         /// <inheritdoc/>
         public override object? ExecuteScalar()
         {
-            var activity = StartActivity(nameof(ExecuteScalar));
+            var operationName = "ExecuteScalar";
+            Activity? activity = null;
+            long startTimestamp = 0;
+
+            if (this.options.EmitMetrics)
+            {
+                startTimestamp = Stopwatch.GetTimestamp();
+            }
+            activity = StartActivity(operationName);
+
             try
             {
-                return this.wrappedCommand.ExecuteScalar();
+                var result = this.wrappedCommand.ExecuteScalar();
+                RecordMetrics(operationName, startTimestamp, null);
+                StopActivity(activity, null);
+                return result;
             }
             catch (Exception ex)
             {
+                RecordMetrics(operationName, startTimestamp, ex);
                 StopActivity(activity, ex);
                 throw;
-            }
-            finally
-            {
-                StopActivity(activity);
             }
         }
 
@@ -301,66 +332,83 @@ namespace OpenTelemetry.Instrumentation.AdoNet
         /// <inheritdoc/>
         protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
         {
-            var activity = StartActivity(nameof(ExecuteDbDataReaderAsync)); // Activity can be null
+            var operationName = "ExecuteDbDataReaderAsync";
+            Activity? activity = null;
+            long startTimestamp = 0;
+
+            if (this.options.EmitMetrics)
+            {
+                startTimestamp = Stopwatch.GetTimestamp();
+            }
+            activity = StartActivity(operationName);
+
             try
             {
                 var reader = await this.wrappedCommand.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-                // Pass the activity and options to the reader wrapper
+                RecordMetrics(operationName, startTimestamp, null);
                 return new InstrumentedDbDataReader(reader, activity, this.options);
             }
             catch (Exception ex)
             {
-                // If an exception occurs before reader is created/returned, stop activity here
-                if (activity != null)
-                {
-                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    if (this.options.RecordException)
-                    {
-                        activity.RecordException(ex);
-                    }
-                    // TODO: Enrich on exception
-                    activity.Dispose();
-                }
+                RecordMetrics(operationName, startTimestamp, ex);
+                StopActivity(activity, ex);
                 throw;
             }
-            // The activity's lifecycle is now managed by the returned InstrumentedDbDataReader.
         }
 
         /// <inheritdoc/>
         public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
         {
-            var activity = StartActivity(nameof(ExecuteNonQueryAsync));
+            var operationName = "ExecuteNonQueryAsync";
+            Activity? activity = null;
+            long startTimestamp = 0;
+
+            if (this.options.EmitMetrics)
+            {
+                startTimestamp = Stopwatch.GetTimestamp();
+            }
+            activity = StartActivity(operationName);
+
             try
             {
-                return await this.wrappedCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                var result = await this.wrappedCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                RecordMetrics(operationName, startTimestamp, null);
+                StopActivity(activity, null);
+                return result;
             }
             catch (Exception ex)
             {
+                RecordMetrics(operationName, startTimestamp, ex);
                 StopActivity(activity, ex);
                 throw;
-            }
-            finally
-            {
-                StopActivity(activity);
             }
         }
 
         /// <inheritdoc/>
         public override async Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken)
         {
-            var activity = StartActivity(nameof(ExecuteScalarAsync));
+            var operationName = "ExecuteScalarAsync";
+            Activity? activity = null;
+            long startTimestamp = 0;
+
+            if (this.options.EmitMetrics)
+            {
+                startTimestamp = Stopwatch.GetTimestamp();
+            }
+            activity = StartActivity(operationName);
+
             try
             {
-                return await this.wrappedCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                var result = await this.wrappedCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                RecordMetrics(operationName, startTimestamp, null);
+                StopActivity(activity, null);
+                return result;
             }
             catch (Exception ex)
             {
+                RecordMetrics(operationName, startTimestamp, ex);
                 StopActivity(activity, ex);
                 throw;
-            }
-            finally
-            {
-                StopActivity(activity);
             }
         }
 

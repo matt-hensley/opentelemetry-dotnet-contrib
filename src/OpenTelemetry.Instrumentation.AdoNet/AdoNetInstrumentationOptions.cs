@@ -77,5 +77,11 @@ namespace OpenTelemetry.Instrumentation.AdoNet
 
         // Consider adding EnrichWithObject for more complex scenarios or different event points like "OnException"
         // public Action<Activity, string, object>? EnrichWithObject { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether ADO.NET client metrics should be collected.
+        /// Default value is <see langword="true"/>.
+        /// </summary>
+        public bool EmitMetrics { get; set; } = true;
     }
 }

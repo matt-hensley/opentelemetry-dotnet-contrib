@@ -6,6 +6,7 @@ using System.Data.Common;
 using System.Diagnostics; // Required for ActivitySource
 using OpenTelemetry.Trace; // Required for SemanticConventions
 using System.Reflection;
+using System.Diagnostics.Metrics;
 
 namespace OpenTelemetry.Instrumentation.AdoNet
 {
@@ -19,6 +20,18 @@ namespace OpenTelemetry.Instrumentation.AdoNet
         internal static readonly ActivitySource ActivitySource = new ActivitySource(
             AssemblyName.Name ?? "OpenTelemetry.Instrumentation.AdoNet", // Default to a fixed name if assembly name is null
             AssemblyName.Version?.ToString() ?? "1.0.0"); // Default to a fixed version if assembly version is null
+
+        internal static readonly Meter Meter = new Meter(AssemblyName.Name ?? "OpenTelemetry.Instrumentation.AdoNet", AssemblyName.Version?.ToString() ?? "1.0.0");
+
+        internal static readonly Histogram<double> DbClientDurationHistogram = Meter.CreateHistogram<double>(
+            "db.client.duration", // Conforms to OpenTelemetry Semantic Conventions for DB client metrics
+            unit: "ms", // Milliseconds is a common unit for operation duration
+            description: "Measures the duration of database client operations.");
+
+        internal static readonly Counter<long> DbClientCallsCounter = Meter.CreateCounter<long>(
+            "db.client.calls",    // Conforms to OpenTelemetry Semantic Conventions
+            unit: "{call}",
+            description: "Counts the number of database client calls.");
 
         private readonly DbConnection wrappedConnection;
         private readonly AdoNetInstrumentationOptions options;

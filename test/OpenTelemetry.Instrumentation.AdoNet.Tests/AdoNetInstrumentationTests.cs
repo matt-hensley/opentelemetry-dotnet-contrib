@@ -1,19 +1,20 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+using System; // Added for IDisposable
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using OpenTelemetry.Trace;
 using Xunit;
-
-namespace OpenTelemetry.Instrumentation.AdoNet.Tests
-{
+using OpenTelemetry.Metrics; // Added for MeterProvider, Metric
+using OpenTelemetry.Exporter; // Added for InMemoryExporter
+using System.Collections.Generic; // Added for List
 using System.Linq;
 using System.Threading.Tasks;
 
-// Add using System; for IDisposable if not already there at the top
+// Namespace declaration was duplicated, ensuring it's correct once.
 namespace OpenTelemetry.Instrumentation.AdoNet.Tests
 {
     public class AdoNetInstrumentationTests : IDisposable
@@ -79,10 +80,20 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
             return (exportedActivities, tracerProvider);
         }
 
-        // Optional overload if many tests don't configure options
         private static (List<Activity> ExportedActivities, TracerProvider TracerProvider) SetupTracer()
         {
             return SetupTracer(configureAdoNetOptions: null);
+        }
+
+        private static (List<Metric> ExportedMetrics, MeterProvider MeterProvider) SetupMetricsProvider()
+        {
+            var exportedMetrics = new List<Metric>();
+            var meterProvider = Sdk.CreateMeterProviderBuilder()
+                .AddAdoNetInstrumentationMetrics()
+                .AddInMemoryExporter(exportedMetrics)
+                .Build();
+
+            return (exportedMetrics, meterProvider);
         }
 
         [Fact]
@@ -104,6 +115,10 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 Assert.Single(exportedActivities);
                 var activity = exportedActivities[0];
                 Assert.Equal($"{this._connection.Database}.{nameof(DbCommand.ExecuteNonQuery)}", activity.DisplayName);
+                Assert.Equal(ActivityKind.Client, activity.Kind);
+                Assert.Equal("sqlite", activity.GetTagItem(SemanticConventions.AttributeDbSystem));
+                Assert.Equal(this._connection.Database, activity.GetTagItem(SemanticConventions.AttributeDbName));
+                Assert.Equal(this._connection.DataSource, activity.GetTagItem(SemanticConventions.AttributeNetPeerName));
                 Assert.Equal(command.CommandText, activity.GetTagItem(SemanticConventions.AttributeDbStatement));
                 Assert.Equal(nameof(DbCommand.ExecuteNonQuery), activity.GetTagItem(SemanticConventions.AttributeDbOperation));
                 Assert.Equal(ActivityStatusCode.Ok, activity.Status);
@@ -126,7 +141,7 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 var result = command.ExecuteScalar();
 
                 // Assert
-                Assert.Equal(123L, result); // Sqlite returns Int64 for INTEGER
+                Assert.Equal(123L, result);
                 Assert.NotNull(exportedActivities);
                 Assert.Single(exportedActivities);
                 var activity = exportedActivities[0];
@@ -158,7 +173,6 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 {
                     Assert.True(reader.Read());
                     Assert.Equal(1, reader.GetInt32(0));
-
                     Assert.Empty(exportedActivities!);
                 }
 
@@ -367,7 +381,7 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 {
                     using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this._connection);
                     using var command = instrumentedConnection.CreateCommand();
-                    command.CommandText = "SELECT Id FROM AsyncReaderTest;"; // Uses table from InitializeSchema
+                    command.CommandText = "SELECT Id FROM AsyncReaderTest;";
 
                     using (var reader = await command.ExecuteReaderAsync())
                     {
@@ -401,7 +415,7 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                 {
                     using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this._connection);
                     using var command = instrumentedConnection.CreateCommand();
-                    command.CommandText = "SELECT Value FROM AsyncScalarTest WHERE Value = 456;"; // Uses table from InitializeSchema
+                    command.CommandText = "SELECT Value FROM AsyncScalarTest WHERE Value = 456;";
 
                     var result = await command.ExecuteScalarAsync();
 
@@ -508,9 +522,6 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
 
                 using (tracerProvider)
                 {
-                    // CreateTestTable(this._connection, "DefaultOptionsTable"); // Table already created in InitializeSchema
-                    // exportedActivities.Clear(); // No activities from schema setup to clear here as tracer is setup after schema
-
                     using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this._connection, null);
 
                     using var command = instrumentedConnection.CreateCommand();
@@ -534,5 +545,131 @@ namespace OpenTelemetry.Instrumentation.AdoNet.Tests
                     Assert.NotNull(activity2.Events.FirstOrDefault(e => e.Name == "exception"));
                 }
             }
+
+        [Fact]
+        public void ExecuteNonQuery_WithMetricsEnabled_RecordsDurationAndCallsMetrics()
+        {
+            // Arrange
+            (var exportedActivities, var tracerProvider) = SetupTracer(options => options.EmitMetrics = true);
+            (var exportedMetrics, var meterProvider) = SetupMetricsProvider();
+
+            using (tracerProvider)
+            using (meterProvider)
+            {
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this._connection);
+                using var command = instrumentedConnection.CreateCommand();
+                command.CommandText = "CREATE TABLE IF NOT EXISTS MetricsTestTable (Id INTEGER PRIMARY KEY);";
+
+                // Act
+                command.ExecuteNonQuery();
+
+                // Assert Metrics
+                meterProvider.ForceFlush(); // Ensure metrics are flushed to the exporter
+                Assert.Single(exportedMetrics.Where(m => m.Name == "db.client.duration"));
+                Assert.Single(exportedMetrics.Where(m => m.Name == "db.client.calls"));
+
+                var durationMetric = exportedMetrics.First(m => m.Name == "db.client.duration");
+                var callMetric = exportedMetrics.First(m => m.Name == "db.client.calls");
+
+                bool foundDurationPoint = false;
+                foreach (var p in durationMetric.GetMetricPoints())
+                {
+                    Assert.True(p.GetHistogramSum() > 0);
+                    Assert.Equal(1L, p.GetHistogramCount());
+                    var tags = new List<KeyValuePair<string, object?>>();
+                    foreach(var tag in p.Tags) { tags.Add(tag); }
+                    Assert.Contains(new KeyValuePair<string, object?>("db.system", "sqlite"), tags);
+                    Assert.Contains(new KeyValuePair<string, object?>("db.operation", "ExecuteNonQuery"), tags);
+                    Assert.Contains(new KeyValuePair<string, object?>("server.address", this._connection.DataSource), tags);
+                    foundDurationPoint = true;
+                }
+                Assert.True(foundDurationPoint, "No histogram point found for duration metric.");
+
+                bool foundCallsPoint = false;
+                foreach (var p in callMetric.GetMetricPoints())
+                {
+                    Assert.Equal(1L, p.GetLongSum());
+                    var tags = new List<KeyValuePair<string, object?>>();
+                    foreach(var tag in p.Tags) { tags.Add(tag); }
+                    Assert.Contains(new KeyValuePair<string, object?>("db.system", "sqlite"), tags);
+                    Assert.Contains(new KeyValuePair<string, object?>("db.operation", "ExecuteNonQuery"), tags);
+                    foundCallsPoint = true;
+                }
+                Assert.True(foundCallsPoint, "No sum point found for calls metric.");
+            }
+        }
+
+        [Fact]
+        public void ExecuteNonQuery_WithMetricsDisabled_DoesNotRecordMetrics()
+        {
+            // Arrange
+            (var exportedActivities, var tracerProvider) = SetupTracer(options => options.EmitMetrics = false);
+            (var exportedMetrics, var meterProvider) = SetupMetricsProvider();
+
+            using (tracerProvider)
+            using (meterProvider)
+            {
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this._connection);
+                using var command = instrumentedConnection.CreateCommand();
+                command.CommandText = "CREATE TABLE IF NOT EXISTS MetricsTestTableDisabled (Id INTEGER PRIMARY KEY);";
+
+                // Act
+                command.ExecuteNonQuery();
+                meterProvider.ForceFlush();
+
+                // Assert Metrics
+                Assert.DoesNotContain(exportedMetrics, m => m.Name == "db.client.duration");
+                Assert.DoesNotContain(exportedMetrics, m => m.Name == "db.client.calls");
+            }
+        }
+
+        [Fact]
+        public void ExecuteNonQuery_WhenExceptionOccurs_MetricsIncludeErrorTag()
+        {
+            // Arrange
+            (var exportedActivities, var tracerProvider) = SetupTracer(options => {
+                options.EmitMetrics = true;
+                options.RecordException = true;
+            });
+            (var exportedMetrics, var meterProvider) = SetupMetricsProvider();
+
+            using (tracerProvider)
+            using (meterProvider)
+            {
+                using var instrumentedConnection = AdoNetInstrumentation.InstrumentConnection(this._connection);
+                using var command = instrumentedConnection.CreateCommand();
+                command.CommandText = "INSERT INTO NonExistentTableForMetrics (Id) VALUES (1);";
+
+                // Act
+                Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
+                meterProvider.ForceFlush();
+
+                // Assert Metrics
+                Assert.Single(exportedMetrics.Where(m => m.Name == "db.client.duration"));
+                Assert.Single(exportedMetrics.Where(m => m.Name == "db.client.calls"));
+
+                var durationMetric = exportedMetrics.First(m => m.Name == "db.client.duration");
+                bool foundErrorDurationPoint = false;
+                foreach (var p in durationMetric.GetMetricPoints())
+                {
+                    var tags = new List<KeyValuePair<string, object?>>();
+                    foreach(var tag in p.Tags) { tags.Add(tag); }
+                    Assert.Contains(new KeyValuePair<string, object?>("error.type", typeof(SqliteException).Name), tags);
+                    foundErrorDurationPoint = true;
+                }
+                Assert.True(foundErrorDurationPoint, "No histogram point with error.type tag found for duration metric.");
+
+                var callMetric = exportedMetrics.First(m => m.Name == "db.client.calls");
+                bool foundErrorCallPoint = false;
+                foreach (var p in callMetric.GetMetricPoints())
+                {
+                    var tags = new List<KeyValuePair<string, object?>>();
+                    foreach(var tag in p.Tags) { tags.Add(tag); }
+                    Assert.Contains(new KeyValuePair<string, object?>("error.type", typeof(SqliteException).Name), tags);
+                    foundErrorCallPoint = true;
+                }
+                Assert.True(foundErrorCallPoint, "No sum point with error.type tag found for calls metric.");
+            }
+        }
     }
 }
