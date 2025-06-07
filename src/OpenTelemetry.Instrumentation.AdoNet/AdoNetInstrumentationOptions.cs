@@ -83,5 +83,15 @@ namespace OpenTelemetry.Instrumentation.AdoNet
         /// Default value is <see langword="true"/>.
         /// </summary>
         public bool EmitMetrics { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to sanitize the <c>db.statement</c> text.
+        /// Default value is <see langword="true"/>.
+        /// Only applies if <see cref="SetDbStatementForText"/> is also <see langword="true"/>.
+        /// If <see langword="true"/>, common comments and literals (string, hex, numeric) are removed/replaced.
+        /// If <see langword="false"/>, the raw command text will be used for <c>CommandType.Text</c>.
+        /// Stored procedure names are not affected by this option and are used directly.
+        /// </summary>
+        public bool SanitizeDbStatement { get; set; } = true;
     }
 }

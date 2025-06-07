@@ -46,6 +46,7 @@ public static class TelemetryConfig
             options.SetDbStatementForText = true;
             options.RecordException = true;
             options.EmitMetrics = true; // Ensure metrics are enabled
+            // options.SanitizeDbStatement = true; // Default is true
         };
 
         MyTracerProvider = Sdk.CreateTracerProviderBuilder()
@@ -147,6 +148,7 @@ services.ConfigureAdoNetInstrumentation(options =>
     options.SetDbStatementForText = true;
     options.RecordException = true;
     options.EmitMetrics = true;
+    // options.SanitizeDbStatement = true; // Default is true
     // options.DbSystem = "your_db_system"; // Optionally override db.system
 });
 
@@ -244,7 +246,8 @@ DbProviderFactory originalFactory = DbProviderFactories.GetFactory(providerName)
 var adoNetOptions = new AdoNetInstrumentationOptions
 {
     SetDbStatementForText = true,
-    EmitMetrics = true
+    EmitMetrics = true,
+    // SanitizeDbStatement = true, // Default is true
     // DbSystem can be set here to override auto-detection if needed
 };
 // Alternatively, if AddAdoNetInstrumentation(options => ...) was called for TracerProviderBuilder:
@@ -287,6 +290,15 @@ You can configure the instrumentation behavior using `AdoNetInstrumentationOptio
 *   **`SetDbStatementForText`**: `bool` (Default: `true`)
     *   If `true`, the `DbCommand.CommandText` is captured in the `db.statement` tag for commands with `CommandType.Text` or `CommandType.StoredProcedure`.
     *   Example: `options.SetDbStatementForText = false;`
+
+*   **`SanitizeDbStatement`**: `bool` (Default: `true`)
+    *   Controls whether the `db.statement` for `CommandType.Text` is sanitized. Only applies if `SetDbStatementForText` is also `true`.
+    *   When `true` (default):
+        *   SQL comments (both `--` and `/* ... */`) are removed.
+        *   String literals (e.g., `'text'`), numeric literals (e.g., `123`, `10.5`), and hexadecimal literals (e.g., `0xABC`) are replaced with a question mark (`?`).
+    *   When `false`: The raw `CommandText` is used for `db.statement` if `SetDbStatementForText` is `true`.
+    *   Stored procedure names (used for `db.statement` when `CommandType` is `StoredProcedure`) are not affected by this option and are always used as-is.
+    *   Example: `options.SanitizeDbStatement = false;`
 
 *   **`RecordException`**: `bool` (Default: `false`)
     *   If `true`, `DbException`s encountered during command execution will be recorded as an event on the activity, including exception type, message, and stack trace. The activity status will always be set to `Error` regardless of this option if an exception occurs.
@@ -356,7 +368,7 @@ The following metrics are collected if `EmitMetrics` is enabled:
         *   `db.system`: Auto-detected or user-configured identifier for the DBMS (see `DbSystem` option for details).
         *   `db.name`: Name of the database.
         *   `server.address`: Network address of the database server.
-        *   `db.operation`: The name of the ADO.NET operation (e.g., `ExecuteNonQuery`, `ExecuteReader`).
+        *   `db.operation`: The name of the ADO.NET operation (e.g., `ExecuteNonQuery`, `ExecuteReader`). For stored procedures, this will be the name of the stored procedure.
         *   `error.type`: (Only if an error occurred) The type name of the exception (e.g., `SqliteException`).
 
 *   **`db.client.calls`** (Counter, Unit: `{call}`)
@@ -365,7 +377,7 @@ The following metrics are collected if `EmitMetrics` is enabled:
         *   `db.system`: Auto-detected or user-configured identifier for the DBMS (see `DbSystem` option for details).
         *   `db.name`: Name of the database.
         *   `server.address`: Network address of the database server.
-        *   `db.operation`: The name of the ADO.NET operation (e.g., `ExecuteNonQuery`, `ExecuteReader`).
+        *   `db.operation`: The name of the ADO.NET operation (e.g., `ExecuteNonQuery`, `ExecuteReader`). For stored procedures, this will be the name of the stored procedure.
         *   `error.type`: (Only if an error occurred) The type name of the exception (e.g., `SqliteException`).
 
 ## Captured Trace Attributes
@@ -374,8 +386,13 @@ This instrumentation aims to capture the following semantic conventions for data
 
 *   **`db.system`**: An identifier for the database management system (DBMS) being used. The value is auto-detected for common providers (e.g., `mssql`, `postgresql`, `mysql`, `oracle`, `sqlite`, `db2`, `firebird`) and can be overridden using the `AdoNetInstrumentationOptions.DbSystem` setting. See the `DbSystem` option description for more details on recognized providers.
 *   **`db.name`**: The name of the database being accessed.
-*   **`db.statement`**: The database statement being executed (if `SetDbStatementForText` is true). For `CommandType.StoredProcedure`, this will be the name of the stored procedure.
-*   **`db.operation`**: The name of the operation being performed (e.g., `ExecuteNonQuery`, `ExecuteReader`, `ExecuteScalar`).
+*   **`db.statement`**: The database statement being executed.
+        *   This attribute is only populated if `AdoNetInstrumentationOptions.SetDbStatementForText` is `true`.
+        *   For `CommandType.Text`:
+            *   By default (`AdoNetInstrumentationOptions.SanitizeDbStatement = true`), the statement is sanitized: comments are removed, and string, numeric, and hex literals are replaced with `?`.
+            *   If `SanitizeDbStatement` is set to `false`, the raw `CommandText` is used.
+        *   For `CommandType.StoredProcedure`: The `CommandText` (which is the stored procedure name) is used directly, without sanitization.
+*   **`db.operation`**: The name of the operation being performed (e.g., `ExecuteNonQuery`, `ExecuteReader`, `ExecuteScalar`). For stored procedures, this will be the name of the stored procedure.
 *   **`net.peer.name`** / **`server.address`**: The hostname or network address of the database server (taken from `DbConnection.DataSource`).
 *   **`server.port`**: (Future consideration, if reliably parsable from DataSource) The port number of the database server.
 *   **Activity Status**: `Ok` on success, `Error` on exception.
