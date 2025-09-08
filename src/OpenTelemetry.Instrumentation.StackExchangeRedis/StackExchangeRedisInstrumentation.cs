@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Internal;
 using StackExchange.Redis;
@@ -34,7 +35,7 @@ public sealed class StackExchangeRedisInstrumentation : IDisposable
     /// </summary>
     public IOptionsMonitor<StackExchangeRedisInstrumentationOptions>? TracingOptions { get; set; }
 
-    internal List<StackExchangeRedisConnectionInstrumentation> InstrumentedConnections { get; } = [];
+    internal ConcurrentDictionary<(string Name, IConnectionMultiplexer Connection), StackExchangeRedisConnectionInstrumentation> InstrumentedConnections { get; set; } = [];
 
     /// <summary>
     /// Adds an <see cref="IConnectionMultiplexer"/> to the instrumentation.
@@ -56,38 +57,32 @@ public sealed class StackExchangeRedisInstrumentation : IDisposable
         Guard.ThrowIfNull(connection);
 
         var options = this.TracingOptions?.Get(name) ?? new();
+        var key = (name, connection);
+        var instrumentation = this.InstrumentedConnections.GetOrAdd(key, _ => new StackExchangeRedisConnectionInstrumentation(connection, name, options));
 
-        lock (this.InstrumentedConnections)
+#pragma warning disable CA2000 // Dispose objects before losing scope
+        var handle = this.HandleManager.AddTracingHandle();
+#pragma warning restore CA2000 // Dispose objects before losing scope
+
+        return new StackExchangeRedisConnectionInstrumentationRegistration(() =>
         {
-            var instrumentation = new StackExchangeRedisConnectionInstrumentation(connection, name, options);
-
-            this.InstrumentedConnections.Add(instrumentation);
-
-            return new StackExchangeRedisConnectionInstrumentationRegistration(() =>
+            if (this.InstrumentedConnections.TryRemove(key, out _))
             {
-                lock (this.InstrumentedConnections)
-                {
-                    if (this.InstrumentedConnections.Remove(instrumentation))
-                    {
-                        instrumentation.Dispose();
-                    }
-                }
-            });
-        }
+                instrumentation.Dispose();
+                handle.Dispose();
+            }
+        });
     }
 
     /// <inheritdoc/>
     public void Dispose()
     {
-        lock (this.InstrumentedConnections)
+        foreach (var instrumentation in this.InstrumentedConnections.Values)
         {
-            foreach (var instrumentation in this.InstrumentedConnections)
-            {
-                instrumentation.Dispose();
-            }
-
-            this.InstrumentedConnections.Clear();
+            instrumentation.Dispose();
         }
+
+        this.InstrumentedConnections.Clear();
     }
 
     private sealed class StackExchangeRedisConnectionInstrumentationRegistration : IDisposable
