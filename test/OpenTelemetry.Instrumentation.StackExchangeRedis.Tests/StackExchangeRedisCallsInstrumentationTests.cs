@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpenTelemetry.Internal;
 using OpenTelemetry.Tests;
 using OpenTelemetry.Trace;
 using StackExchange.Redis;
@@ -81,7 +82,7 @@ public class StackExchangeRedisCallsInstrumentationTests
     }
 
     [Trait("CategoryName", "RedisIntegrationTests")]
-    [Theory]
+    [SkipUnlessEnvVarFoundTheory(RedisEndPointEnvVarName)]
     [InlineData("value1", null, true, false)]
     [InlineData("value1", null, false, true)]
     [InlineData("value1", null, true, true)]
