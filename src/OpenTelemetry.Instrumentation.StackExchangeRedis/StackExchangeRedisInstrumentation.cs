@@ -12,13 +12,19 @@ namespace OpenTelemetry.Instrumentation.StackExchangeRedis;
 /// </summary>
 public sealed class StackExchangeRedisInstrumentation : IDisposable
 {
-    private readonly IOptionsMonitor<StackExchangeRedisInstrumentationOptions> options;
+    /// <summary>
+    /// Redis instrumentation instance.
+    /// </summary>
+    public static readonly StackExchangeRedisInstrumentation Instance = new();
 
-    internal StackExchangeRedisInstrumentation(
-        IOptionsMonitor<StackExchangeRedisInstrumentationOptions> options)
+    internal StackExchangeRedisInstrumentation()
     {
-        this.options = options;
     }
+
+    /// <summary>
+    /// Gets or sets the tracing options for configuring StackExchange.Redis instrumentation.
+    /// </summary>
+    public IOptionsMonitor<StackExchangeRedisInstrumentationOptions>? TracingOptions { get; set; }
 
     internal List<StackExchangeRedisConnectionInstrumentation> InstrumentedConnections { get; } = [];
 
@@ -41,7 +47,7 @@ public sealed class StackExchangeRedisInstrumentation : IDisposable
         Guard.ThrowIfNull(name);
         Guard.ThrowIfNull(connection);
 
-        var options = this.options.Get(name);
+        var options = this.TracingOptions?.Get(name) ?? new();
 
         lock (this.InstrumentedConnections)
         {

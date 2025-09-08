@@ -216,9 +216,16 @@ public static class TracerProviderBuilderExtensions
 
         return builder.ConfigureServices(services =>
         {
-            services.TryAddSingleton(
-                sp => new StackExchangeRedisInstrumentation(
-                    sp.GetRequiredService<IOptionsMonitor<StackExchangeRedisInstrumentationOptions>>()));
+            services.TryAddSingleton(sp =>
+            {
+                var options = sp.GetRequiredService<IOptionsMonitor<StackExchangeRedisInstrumentationOptions>>();
+
+                // Managing our own singleton instance
+                // Trace and metric service collections are separate
+                var instance = StackExchangeRedisInstrumentation.Instance;
+                instance.TracingOptions = options;
+                return instance;
+            });
         });
     }
 }
