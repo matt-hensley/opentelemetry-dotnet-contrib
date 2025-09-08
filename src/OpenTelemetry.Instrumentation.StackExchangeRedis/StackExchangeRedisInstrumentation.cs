@@ -17,6 +17,14 @@ public sealed class StackExchangeRedisInstrumentation : IDisposable
     /// </summary>
     public static readonly StackExchangeRedisInstrumentation Instance = new();
 
+    /// <summary>
+    /// Provides access to the manager responsible for handling instrumentation handles.
+    /// </summary>
+    /// <remarks>This field is read-only and initialized with a new instance of <see
+    /// cref="InstrumentationHandleManager"/>. It can be used to manage and track instrumentation handles throughout the
+    /// application.</remarks>
+    internal readonly InstrumentationHandleManager HandleManager = new();
+
     internal StackExchangeRedisInstrumentation()
     {
     }
