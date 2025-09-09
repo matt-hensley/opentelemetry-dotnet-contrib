@@ -24,10 +24,15 @@ OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentati
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentationOptions.SetVerboseDatabaseStatements.get -> bool
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentationOptions.SetVerboseDatabaseStatements.set -> void
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentationOptions.StackExchangeRedisInstrumentationOptions() -> void
+OpenTelemetry.Metrics.StackExchangeRedisMeterProviderBuilderExtensions
 OpenTelemetry.Trace.TracerProviderBuilderExtensions
 override OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext.GetHashCode() -> int
 static OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext.operator ==(OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext left, OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext right) -> bool
 static OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext.operator !=(OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext left, OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext right) -> bool
+static OpenTelemetry.Metrics.StackExchangeRedisMeterProviderBuilderExtensions.AddRedisInstrumentation(this OpenTelemetry.Metrics.MeterProviderBuilder! builder) -> OpenTelemetry.Metrics.MeterProviderBuilder!
+static OpenTelemetry.Metrics.StackExchangeRedisMeterProviderBuilderExtensions.AddRedisInstrumentation(this OpenTelemetry.Metrics.MeterProviderBuilder! builder, object! serviceKey) -> OpenTelemetry.Metrics.MeterProviderBuilder!
+static OpenTelemetry.Metrics.StackExchangeRedisMeterProviderBuilderExtensions.AddRedisInstrumentation(this OpenTelemetry.Metrics.MeterProviderBuilder! builder, StackExchange.Redis.IConnectionMultiplexer! connection) -> OpenTelemetry.Metrics.MeterProviderBuilder!
+static OpenTelemetry.Metrics.StackExchangeRedisMeterProviderBuilderExtensions.AddRedisInstrumentation(this OpenTelemetry.Metrics.MeterProviderBuilder! builder, string? name, StackExchange.Redis.IConnectionMultiplexer? connection, object? serviceKey) -> OpenTelemetry.Metrics.MeterProviderBuilder!
 static OpenTelemetry.Trace.TracerProviderBuilderExtensions.AddRedisInstrumentation(this OpenTelemetry.Trace.TracerProviderBuilder! builder) -> OpenTelemetry.Trace.TracerProviderBuilder!
 static OpenTelemetry.Trace.TracerProviderBuilderExtensions.AddRedisInstrumentation(this OpenTelemetry.Trace.TracerProviderBuilder! builder, object! serviceKey) -> OpenTelemetry.Trace.TracerProviderBuilder!
 static OpenTelemetry.Trace.TracerProviderBuilderExtensions.AddRedisInstrumentation(this OpenTelemetry.Trace.TracerProviderBuilder! builder, StackExchange.Redis.IConnectionMultiplexer! connection) -> OpenTelemetry.Trace.TracerProviderBuilder!

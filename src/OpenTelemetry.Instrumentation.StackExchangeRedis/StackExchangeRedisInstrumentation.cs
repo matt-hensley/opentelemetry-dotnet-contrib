@@ -56,12 +56,13 @@ public sealed class StackExchangeRedisInstrumentation : IDisposable
         Guard.ThrowIfNull(name);
         Guard.ThrowIfNull(connection);
 
-        var options = this.TracingOptions?.Get(name) ?? new();
+        var tracingOptions = this.TracingOptions?.Get(name) ?? new();
         var key = (name, connection);
-        var instrumentation = this.InstrumentedConnections.GetOrAdd(key, _ => new StackExchangeRedisConnectionInstrumentation(connection, name, options));
+        var instrumentation = this.InstrumentedConnections.GetOrAdd(key, _ => new StackExchangeRedisConnectionInstrumentation(connection, name, tracingOptions));
 
 #pragma warning disable CA2000 // Dispose objects before losing scope
-        var handle = this.HandleManager.AddTracingHandle();
+        var tracingHandle = this.TracingOptions != null ? this.HandleManager.AddTracingHandle() : null;
+        var metricsHandle = this.HandleManager.AddMetricHandle();
 #pragma warning restore CA2000 // Dispose objects before losing scope
 
         return new StackExchangeRedisConnectionInstrumentationRegistration(() =>
@@ -69,7 +70,8 @@ public sealed class StackExchangeRedisInstrumentation : IDisposable
             if (this.InstrumentedConnections.TryRemove(key, out _))
             {
                 instrumentation.Dispose();
-                handle.Dispose();
+                tracingHandle?.Dispose();
+                metricsHandle?.Dispose();
             }
         });
     }
