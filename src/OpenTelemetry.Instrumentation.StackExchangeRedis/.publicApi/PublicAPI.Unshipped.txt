@@ -10,6 +10,8 @@ OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentati
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation.AddConnection(StackExchange.Redis.IConnectionMultiplexer! connection) -> System.IDisposable!
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation.AddConnection(string! name, StackExchange.Redis.IConnectionMultiplexer! connection) -> System.IDisposable!
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation.Dispose() -> void
+OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation.TracingOptions.get -> Microsoft.Extensions.Options.IOptionsMonitor<OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentationOptions!>?
+OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation.TracingOptions.set -> void
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentationOptions
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentationOptions.Enrich.get -> System.Action<System.Diagnostics.Activity!, OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext>?
 OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentationOptions.Enrich.set -> void
@@ -35,6 +37,7 @@ static OpenTelemetry.Trace.TracerProviderBuilderExtensions.AddRedisInstrumentati
 static OpenTelemetry.Trace.TracerProviderBuilderExtensions.AddRedisInstrumentation(this OpenTelemetry.Trace.TracerProviderBuilder! builder, System.Action<OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentationOptions!>! configure) -> OpenTelemetry.Trace.TracerProviderBuilder!
 static OpenTelemetry.Trace.TracerProviderBuilderExtensions.ConfigureRedisInstrumentation(this OpenTelemetry.Trace.TracerProviderBuilder! builder, System.Action<OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation!>! configure) -> OpenTelemetry.Trace.TracerProviderBuilder!
 static OpenTelemetry.Trace.TracerProviderBuilderExtensions.ConfigureRedisInstrumentation(this OpenTelemetry.Trace.TracerProviderBuilder! builder, System.Action<System.IServiceProvider!, OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation!>! configure) -> OpenTelemetry.Trace.TracerProviderBuilder!
+static readonly OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation.Instance -> OpenTelemetry.Instrumentation.StackExchangeRedis.StackExchangeRedisInstrumentation!
 ~override OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext.ToString() -> string
 ~override OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext.Equals(object obj) -> bool
 OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext.Equals(OpenTelemetry.Instrumentation.StackExchangeRedis.RedisInstrumentationContext other) -> bool

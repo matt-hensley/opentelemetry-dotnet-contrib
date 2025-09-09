@@ -35,7 +35,7 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
     internal readonly ConcurrentDictionary<(ActivityTraceId TraceId, ActivitySpanId SpanId), (Activity Activity, ProfilingSession Session)> Cache
         = new();
 
-    private readonly StackExchangeRedisInstrumentationOptions options;
+    private readonly StackExchangeRedisInstrumentationOptions tracingOptions;
     private readonly EventWaitHandle stopHandle = new(false, EventResetMode.ManualReset);
     private readonly Thread drainThread;
 
@@ -46,15 +46,15 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
     /// </summary>
     /// <param name="connection"><see cref="IConnectionMultiplexer"/> to instrument.</param>
     /// <param name="name">Optional name for the connection.</param>
-    /// <param name="options">Configuration options for redis instrumentation.</param>
+    /// <param name="tracingOptions">Configuration options for redis tracing instrumentation.</param>
     public StackExchangeRedisConnectionInstrumentation(
         IConnectionMultiplexer connection,
         string? name,
-        StackExchangeRedisInstrumentationOptions options)
+        StackExchangeRedisInstrumentationOptions tracingOptions)
     {
         Guard.ThrowIfNull(connection);
 
-        this.options = options ?? new StackExchangeRedisInstrumentationOptions();
+        this.tracingOptions = tracingOptions ?? new StackExchangeRedisInstrumentationOptions();
 
         this.drainThread = new Thread(this.DrainEntries)
         {
@@ -112,7 +112,7 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
 
     internal void Flush()
     {
-        RedisProfilerEntryToActivityConverter.DrainSession(null, this.defaultSession.FinishProfiling(), this.options);
+        RedisProfilerEntryToActivityConverter.DrainSession(null, this.defaultSession.FinishProfiling(), this.tracingOptions);
 
         foreach (var entry in this.Cache)
         {
@@ -124,7 +124,7 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
             }
 
             var session = entry.Value.Session;
-            RedisProfilerEntryToActivityConverter.DrainSession(parent, session.FinishProfiling(), this.options);
+            RedisProfilerEntryToActivityConverter.DrainSession(parent, session.FinishProfiling(), this.tracingOptions);
             this.Cache.TryRemove((entry.Key.TraceId, entry.Key.SpanId), out _);
         }
     }
@@ -133,7 +133,7 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
     {
         while (true)
         {
-            if (this.stopHandle.WaitOne(this.options.FlushInterval))
+            if (this.stopHandle.WaitOne(this.tracingOptions.FlushInterval))
             {
                 break;
             }
