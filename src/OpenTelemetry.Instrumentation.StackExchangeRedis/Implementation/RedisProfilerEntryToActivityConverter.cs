@@ -188,12 +188,11 @@ internal static class RedisProfilerEntryToActivityConverter
             // command.RetransmissionOf;
             // command.RetransmissionReason;
 
-            var enqueued = command.CommandCreated.Add(command.CreationToEnqueued);
-            var send = enqueued.Add(command.EnqueuedToSending);
-            var response = send.Add(command.SentToResponse);
-
             if (options.EnrichActivityWithTimingEvents)
             {
+                var enqueued = command.CommandCreated.Add(command.CreationToEnqueued);
+                var send = enqueued.Add(command.EnqueuedToSending);
+                var response = send.Add(command.SentToResponse);
                 activity.AddEvent(new ActivityEvent("Enqueued", enqueued));
                 activity.AddEvent(new ActivityEvent("Sent", send));
                 activity.AddEvent(new ActivityEvent("ResponseReceived", response));
