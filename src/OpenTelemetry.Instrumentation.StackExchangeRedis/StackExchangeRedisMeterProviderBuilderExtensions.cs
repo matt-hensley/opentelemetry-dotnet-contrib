@@ -56,7 +56,6 @@ public static class StackExchangeRedisMeterProviderBuilderExtensions
         return AddRedisInstrumentation(builder, name: null, connection: null, serviceKey);
     }
 
-
     /// <summary>
     /// Enables automatic data collection of outgoing requests to Redis.
     /// </summary>
@@ -81,7 +80,7 @@ public static class StackExchangeRedisMeterProviderBuilderExtensions
         builder.AddRedisInstrumentationSharedServices();
 
         return builder
-            .AddMeter(StackExchangeRedisInstrumentation.MeterName)
+            .AddMeter(StackExchangeRedisConnectionInstrumentation.MeterName)
             .AddInstrumentation(sp =>
             {
                 var instrumentation = sp.GetRequiredService<StackExchangeRedisInstrumentation>();

@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 using OpenTelemetry.Instrumentation.StackExchangeRedis.Implementation;
 using OpenTelemetry.Internal;
@@ -22,6 +23,8 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
     internal static readonly string ActivitySourceName = Assembly.GetName().Name!;
     internal static readonly string ActivityName = ActivitySourceName + ".Execute";
     internal static readonly ActivitySource ActivitySource = new(ActivitySourceName, Assembly.GetPackageVersion());
+    internal static readonly string MeterName = Assembly.GetName().Name!;
+    internal static readonly Meter Meter = new(MeterName, Assembly.GetPackageVersion());
     internal static readonly IEnumerable<KeyValuePair<string, object?>> OldCreationTags =
     [
         new(SemanticConventions.AttributeDbSystem, "redis")
