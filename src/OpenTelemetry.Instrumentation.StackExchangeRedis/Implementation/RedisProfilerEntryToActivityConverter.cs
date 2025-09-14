@@ -92,6 +92,7 @@ internal static class RedisProfilerEntryToActivityConverter
             name = StackExchangeRedisConnectionInstrumentation.ActivityName;
         }
 
+        // TODO make this less clever, might be an extra allocation with the collection init
         var activity = StackExchangeRedisConnectionInstrumentation.ActivitySource.StartActivity(
             name,
             ActivityKind.Client,
