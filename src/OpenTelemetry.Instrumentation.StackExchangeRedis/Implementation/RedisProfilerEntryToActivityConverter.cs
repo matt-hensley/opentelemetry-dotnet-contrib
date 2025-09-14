@@ -74,6 +74,12 @@ internal static class RedisProfilerEntryToActivityConverter
 
     public static Activity? ProfilerCommandToActivity(Activity? parentActivity, IProfiledCommand command, StackExchangeRedisInstrumentationOptions options)
     {
+        if (StackExchangeRedisInstrumentation.Instance.HandleManager.TracingHandles == 0
+            && StackExchangeRedisInstrumentation.Instance.HandleManager.MetricHandles == 0)
+        {
+            return null;
+        }
+
         try
         {
             if (options.Filter != null && !options.Filter(new(parentActivity, command)))
