@@ -31,16 +31,15 @@ internal class ServerCertificateValidationProvider
         }
 
         var trustedCertificates = new X509Certificate2Collection();
-        if (!LoadCertificateToTrustedCollection(trustedCertificates, certificateFile))
+        if (!LoadCertificateToTrustedCollection(trustedCertificates, certificateFile, log))
         {
-            log.FailedToLoadCertificateInTrustedStorage(certificateFile);
             return null;
         }
 
         return new ServerCertificateValidationProvider(trustedCertificates, log);
     }
 
-    private static bool LoadCertificateToTrustedCollection(X509Certificate2Collection collection, string certFileName)
+    private static bool LoadCertificateToTrustedCollection(X509Certificate2Collection collection, string certFileName, IServerCertificateValidationEventSource log)
     {
         try
         {
@@ -52,8 +51,10 @@ internal class ServerCertificateValidationProvider
 
             return true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            log.FailedToLoadCertificateInTrustedStorage(certFileName);
+            log.FailedToValidateCertificate($"Exception loading certificate from '{certFileName}': {ex.Message}");
             return false;
         }
     }

@@ -49,8 +49,9 @@ internal sealed class ProcessDetector : IResourceDetector
                 {
                     return getter(process);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    ProcessResourceEventSource.Log.ResourceAttributesExtractException(nameof(ProcessDetector), ex);
                     return default;
                 }
             }

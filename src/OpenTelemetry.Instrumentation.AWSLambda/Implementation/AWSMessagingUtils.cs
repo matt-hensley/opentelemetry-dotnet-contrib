@@ -117,9 +117,9 @@ internal class AWSMessagingUtils
             {
                 snsMessage = JsonSerializer.Deserialize(body, SourceGenerationContext.Default.SNSMessage);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // TODO: log exception.
+                AWSLambdaInstrumentationEventSource.Log.FailedToDeserializeSqsBody(ex);
                 return null;
             }
         }
