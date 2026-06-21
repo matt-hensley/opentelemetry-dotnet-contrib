@@ -14,7 +14,7 @@ internal sealed class WcfInstrumentationEventSource : EventSource
     [NonEvent]
     public void RequestFilterException(Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.RequestFilterException(ex.ToInvariantString());
         }
@@ -35,7 +35,7 @@ internal sealed class WcfInstrumentationEventSource : EventSource
     [NonEvent]
     public void EnrichmentException(Exception exception)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.EnrichmentException(exception.ToInvariantString());
         }
@@ -50,7 +50,7 @@ internal sealed class WcfInstrumentationEventSource : EventSource
     [NonEvent]
     public void HttpServiceModelReflectionFailedToBind(Exception exception, System.Reflection.Assembly? assembly)
     {
-        if (this.IsEnabled(EventLevel.Verbose, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Verbose, EventKeywords.All))
         {
             this.HttpServiceModelReflectionFailedToBind(exception.ToInvariantString(), assembly?.FullName);
         }
@@ -65,7 +65,7 @@ internal sealed class WcfInstrumentationEventSource : EventSource
     [NonEvent]
     public void AspNetReflectionFailedToBind(Exception exception)
     {
-        if (this.IsEnabled(EventLevel.Verbose, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Verbose, EventKeywords.All))
         {
             this.AspNetReflectionFailedToBind(exception.ToInvariantString());
         }

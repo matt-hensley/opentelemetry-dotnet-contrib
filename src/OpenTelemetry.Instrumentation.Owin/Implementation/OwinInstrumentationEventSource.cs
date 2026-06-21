@@ -18,7 +18,7 @@ internal sealed class OwinInstrumentationEventSource : EventSource, IConfigurati
     [NonEvent]
     public void RequestFilterException(Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.RequestFilterException(ex.ToInvariantString());
         }
@@ -39,7 +39,7 @@ internal sealed class OwinInstrumentationEventSource : EventSource, IConfigurati
     [NonEvent]
     public void EnrichmentException(Exception exception)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.EnrichmentException(exception.ToInvariantString());
         }

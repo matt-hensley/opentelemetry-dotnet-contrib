@@ -14,7 +14,7 @@ internal sealed class ContainerExtensionsEventSource : EventSource
     [NonEvent]
     public void ExtractResourceAttributesException(string format, Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.FailedToExtractResourceAttributes(format, ex.ToInvariantString());
         }

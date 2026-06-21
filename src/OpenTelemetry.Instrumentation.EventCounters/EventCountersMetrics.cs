@@ -5,7 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using System.Diagnostics.Tracing;
 using System.Globalization;
-using OpenTelemetry.Internal;
+using OpenTelemetry.Metrics;
 
 namespace OpenTelemetry.Instrumentation.EventCounters;
 
@@ -31,8 +31,7 @@ internal sealed class EventCountersMetrics : EventListener
         // https://github.com/open-telemetry/opentelemetry-dotnet-contrib/issues/1024.
         _ = EventCountersInstrumentationEventSource.Log;
 
-        var assembly = typeof(EventCountersMetrics).Assembly;
-        MeterInstance = new Meter(assembly.GetName().Name, assembly.GetPackageVersion());
+        MeterInstance = MeterFactory.Create<EventCountersMetrics>(null);
     }
 
     /// <summary>
