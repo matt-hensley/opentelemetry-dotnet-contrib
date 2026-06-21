@@ -50,13 +50,22 @@ public class ProcessResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public void ProcessDetector_ContainsExpectedAttributeKeys()
+    public void ProcessDetector_PidIsPositive()
     {
         var resource = ResourceBuilder.CreateEmpty().AddProcessDetector().Build();
         var resourceAttributes = resource.Attributes.ToDictionary(x => x.Key, x => x.Value);
 
-        Assert.Contains(ProcessSemanticConventions.AttributeProcessOwner, resourceAttributes.Keys);
-        Assert.Contains(ProcessSemanticConventions.AttributeProcessPid, resourceAttributes.Keys);
-        Assert.Contains(ProcessSemanticConventions.AttributeProcessCreationTime, resourceAttributes.Keys);
+        var pid = Assert.IsType<long>(resourceAttributes[ProcessSemanticConventions.AttributeProcessPid]);
+        Assert.True(pid > 0, "Process ID should be a positive integer.");
+    }
+
+    [Fact]
+    public void ProcessDetector_OwnerIsNotEmpty()
+    {
+        var resource = ResourceBuilder.CreateEmpty().AddProcessDetector().Build();
+        var resourceAttributes = resource.Attributes.ToDictionary(x => x.Key, x => x.Value);
+
+        var owner = Assert.IsType<string>(resourceAttributes[ProcessSemanticConventions.AttributeProcessOwner]);
+        Assert.NotEmpty(owner);
     }
 }

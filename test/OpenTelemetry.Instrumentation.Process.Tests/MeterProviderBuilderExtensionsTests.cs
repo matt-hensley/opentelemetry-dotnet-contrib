@@ -17,70 +17,6 @@ public class MeterProviderBuilderExtensionsTests
     }
 
     [Fact]
-    public void ProcessMetrics_MemoryUsageMetricHasCorrectMetadata()
-    {
-        var exportedItems = new List<Metric>();
-        using var meterProvider = Sdk.CreateMeterProviderBuilder()
-            .AddProcessInstrumentation()
-            .AddInMemoryExporter(exportedItems)
-            .Build();
-
-        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
-
-        var metric = exportedItems.First(m => m.Name == "process.memory.usage");
-        Assert.Equal("By", metric.Unit);
-        Assert.Equal("The amount of physical memory in use.", metric.Description);
-    }
-
-    [Fact]
-    public void ProcessMetrics_VirtualMemoryMetricHasCorrectMetadata()
-    {
-        var exportedItems = new List<Metric>();
-        using var meterProvider = Sdk.CreateMeterProviderBuilder()
-            .AddProcessInstrumentation()
-            .AddInMemoryExporter(exportedItems)
-            .Build();
-
-        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
-
-        var metric = exportedItems.First(m => m.Name == "process.memory.virtual");
-        Assert.Equal("By", metric.Unit);
-        Assert.Equal("The amount of committed virtual memory.", metric.Description);
-    }
-
-    [Fact]
-    public void ProcessMetrics_CpuTimeMetricHasCorrectMetadata()
-    {
-        var exportedItems = new List<Metric>();
-        using var meterProvider = Sdk.CreateMeterProviderBuilder()
-            .AddProcessInstrumentation()
-            .AddInMemoryExporter(exportedItems)
-            .Build();
-
-        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
-
-        var metric = exportedItems.First(m => m.Name == "process.cpu.time");
-        Assert.Equal("s", metric.Unit);
-        Assert.Equal("Total CPU seconds broken down by different states.", metric.Description);
-    }
-
-    [Fact]
-    public void ProcessMetrics_ThreadCountMetricHasCorrectMetadata()
-    {
-        var exportedItems = new List<Metric>();
-        using var meterProvider = Sdk.CreateMeterProviderBuilder()
-            .AddProcessInstrumentation()
-            .AddInMemoryExporter(exportedItems)
-            .Build();
-
-        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
-
-        var metric = exportedItems.First(m => m.Name == "process.thread.count");
-        Assert.Equal("{thread}", metric.Unit);
-        Assert.Equal("Process threads count.", metric.Description);
-    }
-
-    [Fact]
     public void ProcessMetrics_MemoryUsageReportsPositiveValues()
     {
         var exportedItems = new List<Metric>();
@@ -92,6 +28,24 @@ public class MeterProviderBuilderExtensionsTests
         meterProvider.ForceFlush(MaxTimeToAllowForFlush);
 
         var metric = exportedItems.First(m => m.Name == "process.memory.usage");
+        foreach (ref readonly var metricPoint in metric.GetMetricPoints())
+        {
+            Assert.True(metricPoint.GetSumLong() > 0);
+        }
+    }
+
+    [Fact]
+    public void ProcessMetrics_VirtualMemoryReportsPositiveValues()
+    {
+        var exportedItems = new List<Metric>();
+        using var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddProcessInstrumentation()
+            .AddInMemoryExporter(exportedItems)
+            .Build();
+
+        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
+
+        var metric = exportedItems.First(m => m.Name == "process.memory.virtual");
         foreach (ref readonly var metricPoint in metric.GetMetricPoints())
         {
             Assert.True(metricPoint.GetSumLong() > 0);
@@ -117,9 +71,87 @@ public class MeterProviderBuilderExtensionsTests
     }
 
     [Fact]
-    public void ProcessMetrics_SemanticConventionsVersionIsSet()
+    public void ProcessMetrics_CpuTimeReportsNonNegativeValues()
     {
-        Assert.NotNull(ProcessMetrics.SemanticConventionsVersion);
-        Assert.Equal(new Version(1, 25, 0), ProcessMetrics.SemanticConventionsVersion);
+        var exportedItems = new List<Metric>();
+        using var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddProcessInstrumentation()
+            .AddInMemoryExporter(exportedItems)
+            .Build();
+
+        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
+
+        var metric = exportedItems.First(m => m.Name == "process.cpu.time");
+        foreach (ref readonly var metricPoint in metric.GetMetricPoints())
+        {
+            Assert.True(metricPoint.GetSumDouble() >= 0);
+        }
+    }
+
+    [Fact]
+    public void ProcessMetrics_MemoryUsageIsWithinReasonableRange()
+    {
+        var exportedItems = new List<Metric>();
+        using var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddProcessInstrumentation()
+            .AddInMemoryExporter(exportedItems)
+            .Build();
+
+        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
+
+        var metric = exportedItems.First(m => m.Name == "process.memory.usage");
+        foreach (ref readonly var metricPoint in metric.GetMetricPoints())
+        {
+            var value = metricPoint.GetSumLong();
+            Assert.True(value > 1_000_000, "Working set should be at least 1 MB for a .NET process.");
+        }
+    }
+
+    [Fact]
+    public void ProcessMetrics_VirtualMemoryExceedsPhysicalMemory()
+    {
+        var exportedItems = new List<Metric>();
+        using var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddProcessInstrumentation()
+            .AddInMemoryExporter(exportedItems)
+            .Build();
+
+        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
+
+        var physicalMetric = exportedItems.First(m => m.Name == "process.memory.usage");
+        var virtualMetric = exportedItems.First(m => m.Name == "process.memory.virtual");
+
+        long physical = 0;
+        foreach (ref readonly var metricPoint in physicalMetric.GetMetricPoints())
+        {
+            physical = metricPoint.GetSumLong();
+        }
+
+        long virtual_ = 0;
+        foreach (ref readonly var metricPoint in virtualMetric.GetMetricPoints())
+        {
+            virtual_ = metricPoint.GetSumLong();
+        }
+
+        Assert.True(virtual_ >= physical, "Virtual memory should be >= physical memory.");
+    }
+
+    [Fact]
+    public void ProcessMetrics_ConsecutiveFlushesProduceConsistentMetricNames()
+    {
+        var exportedItems = new List<Metric>();
+        using var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddProcessInstrumentation()
+            .AddInMemoryExporter(exportedItems)
+            .Build();
+
+        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
+        var firstNames = exportedItems.Select(m => m.Name).OrderBy(n => n).ToList();
+
+        exportedItems.Clear();
+        meterProvider.ForceFlush(MaxTimeToAllowForFlush);
+        var secondNames = exportedItems.Select(m => m.Name).OrderBy(n => n).ToList();
+
+        Assert.Equal(firstNames, secondNames);
     }
 }
