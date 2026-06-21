@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics;
-using System.Reflection;
 using System.ServiceModel.Channels;
 using OpenTelemetry.Instrumentation.Wcf.Implementation;
-using OpenTelemetry.Internal;
+using OpenTelemetry.Trace;
 
 namespace OpenTelemetry.Instrumentation.Wcf;
 
@@ -14,16 +13,11 @@ namespace OpenTelemetry.Instrumentation.Wcf;
 /// </summary>
 internal static class WcfInstrumentationActivitySource
 {
-    internal static readonly Assembly Assembly = typeof(WcfInstrumentationActivitySource).Assembly;
-    internal static readonly AssemblyName AssemblyName = Assembly.GetName();
-#pragma warning disable IDE0370 // Suppression is unnecessary
-    internal static readonly string ActivitySourceName = AssemblyName.Name!;
-#pragma warning restore IDE0370 // Suppression is unnecessary
+    internal static readonly ActivitySource ActivitySource = ActivitySourceFactory.Create(typeof(WcfInstrumentationActivitySource), null);
+    internal static readonly string ActivitySourceName = ActivitySource.Name;
     internal static readonly string IncomingRequestActivityName = ActivitySourceName + ".IncomingRequest";
     internal static readonly string OutgoingRequestActivityName = ActivitySourceName + ".OutgoingRequest";
     internal static readonly string UnassociatedExceptionActivityName = ActivitySourceName + ".Exception";
-
-    public static ActivitySource ActivitySource { get; } = new(ActivitySourceName, Assembly.GetPackageVersion());
 
     public static WcfInstrumentationOptions? Options { get; set; }
 

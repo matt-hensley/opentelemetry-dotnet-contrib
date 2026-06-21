@@ -7,7 +7,6 @@ using System.Diagnostics;
 using System.Net.Http;
 #endif
 using System.Net.Sockets;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -22,12 +21,8 @@ internal partial class ElasticsearchRequestPipelineDiagnosticListener : Listener
     internal const string ExceptionCustomPropertyName = "OTel.Elasticsearch.Exception";
     internal const string AttributeDbMethod = "db.method";
 
-    internal static readonly Assembly Assembly = typeof(ElasticsearchRequestPipelineDiagnosticListener).Assembly;
-    internal static readonly AssemblyName AssemblyName = Assembly.GetName();
-#pragma warning disable IDE0370 // Suppression is unnecessary
-    internal static readonly string ActivitySourceName = AssemblyName.Name!;
-#pragma warning restore IDE0370 // Suppression is unnecessary
-    internal static readonly ActivitySource ActivitySource = new(ActivitySourceName, Assembly.GetPackageVersion());
+    internal static readonly ActivitySource ActivitySource = ActivitySourceFactory.Create<ElasticsearchRequestPipelineDiagnosticListener>(null);
+    internal static readonly string ActivitySourceName = ActivitySource.Name;
 
     private const string RequestRegexPattern = @"\n# Request:\r?\n(\{.*)\n# Response";
 

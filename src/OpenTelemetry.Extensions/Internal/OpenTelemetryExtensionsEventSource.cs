@@ -17,7 +17,7 @@ internal sealed class OpenTelemetryExtensionsEventSource : EventSource
     [NonEvent]
     public void LogProcessorException(string @event, Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.LogProcessorException(@event, ex.ToInvariantString());
         }
@@ -32,7 +32,7 @@ internal sealed class OpenTelemetryExtensionsEventSource : EventSource
     [NonEvent]
     public void LogRecordFilterException(string? categoryName, Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Warning, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Warning, EventKeywords.All))
         {
             this.LogRecordFilterException(categoryName, ex.ToInvariantString());
         }

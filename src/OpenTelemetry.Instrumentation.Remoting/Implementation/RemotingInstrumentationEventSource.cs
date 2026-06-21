@@ -14,7 +14,7 @@ internal class RemotingInstrumentationEventSource : EventSource
     [NonEvent]
     public void MessageFilterException(Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.MessageFilterException(ex.ToInvariantString());
         }
@@ -29,7 +29,7 @@ internal class RemotingInstrumentationEventSource : EventSource
     [NonEvent]
     public void DynamicSinkException(Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.DynamicSinkException(ex.ToInvariantString());
         }
@@ -44,7 +44,7 @@ internal class RemotingInstrumentationEventSource : EventSource
     [NonEvent]
     public void MethodMessageEnrichmentException(Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.MethodMessageEnrichmentException(ex.ToInvariantString());
         }
@@ -56,7 +56,7 @@ internal class RemotingInstrumentationEventSource : EventSource
     [NonEvent]
     public void MethodReturnMessageEnrichmentException(Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.MethodReturnMessageEnrichmentException(ex.ToInvariantString());
         }

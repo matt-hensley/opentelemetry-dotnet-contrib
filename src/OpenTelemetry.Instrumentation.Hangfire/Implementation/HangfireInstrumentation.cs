@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics;
-using System.Reflection;
 using Hangfire;
-using OpenTelemetry.Internal;
 using OpenTelemetry.Trace;
 
 namespace OpenTelemetry.Instrumentation.Hangfire.Implementation;
@@ -12,24 +10,14 @@ namespace OpenTelemetry.Instrumentation.Hangfire.Implementation;
 internal sealed class HangfireInstrumentation
 {
     /// <summary>
-    /// The assembly.
+    /// The activity source.
     /// </summary>
-    internal static readonly Assembly Assembly = typeof(HangfireInstrumentation).Assembly;
-
-    /// <summary>
-    /// The assembly name.
-    /// </summary>
-    internal static readonly AssemblyName AssemblyName = Assembly.GetName();
+    internal static readonly ActivitySource ActivitySource = ActivitySourceFactory.Create<HangfireInstrumentation>(null);
 
     /// <summary>
     /// The activity source name.
     /// </summary>
-    internal static readonly string ActivitySourceName = AssemblyName.Name;
-
-    /// <summary>
-    /// The activity source.
-    /// </summary>
-    internal static readonly ActivitySource ActivitySource = new(ActivitySourceName, Assembly.GetPackageVersion());
+    internal static readonly string ActivitySourceName = ActivitySource.Name;
 
     /// <summary>
     /// The default display name delegate.

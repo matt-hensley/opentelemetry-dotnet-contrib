@@ -14,7 +14,7 @@ internal sealed class EntityFrameworkInstrumentationEventSource : EventSource
     [NonEvent]
     public void UnknownErrorProcessingEvent(string handlerName, string eventName, Exception ex)
     {
-        if (this.IsEnabled(EventLevel.Error, (EventKeywords)(-1)))
+        if (this.IsEnabled(EventLevel.Error, EventKeywords.All))
         {
             this.UnknownErrorProcessingEvent(handlerName, eventName, ex.ToInvariantString());
         }
