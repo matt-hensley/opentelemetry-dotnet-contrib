@@ -108,7 +108,7 @@ internal sealed partial class ContainerDetector : IResourceDetector
     private static partial Regex IdFromLineV2Regex();
 #else
 #pragma warning disable SA1201 // A field should not follow a method
-    private static readonly Regex IdFromLineV2RegexField = new(@".*/.+/([\w+-.]{64})/.*$");
+    private static readonly Regex IdFromLineV2RegexField = new(@".*/.+/([\w+-.]{64})/.*$", RegexOptions.None, TimeSpan.FromSeconds(5));
 #pragma warning restore SA1201 // A field should not follow a method
 
     private static Regex IdFromLineV2Regex() => IdFromLineV2RegexField;
