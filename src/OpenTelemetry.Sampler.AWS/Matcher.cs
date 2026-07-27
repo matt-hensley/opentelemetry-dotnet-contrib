@@ -8,6 +8,8 @@ namespace OpenTelemetry.Sampler.AWS;
 
 internal static class Matcher
 {
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(5);
+
     public static readonly IReadOnlyDictionary<string, string> XRayCloudPlatform = new Dictionary<string, string>()
     {
         { "aws_ec2", "AWS::EC2::Instance" },
@@ -40,7 +42,7 @@ internal static class Matcher
         {
             if (c is '*' or '?')
             {
-                return Regex.IsMatch(text, ToRegexPattern(globPattern));
+                return Regex.IsMatch(text, ToRegexPattern(globPattern), RegexOptions.None, RegexTimeout);
             }
         }
 

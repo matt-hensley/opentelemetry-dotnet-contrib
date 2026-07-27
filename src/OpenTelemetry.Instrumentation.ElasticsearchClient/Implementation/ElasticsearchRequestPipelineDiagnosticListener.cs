@@ -32,7 +32,7 @@ internal partial class ElasticsearchRequestPipelineDiagnosticListener : Listener
     private const string RequestRegexPattern = @"\n# Request:\r?\n(\{.*)\n# Response";
 
 #if !NET
-    private static readonly Regex ParseRequest = new(RequestRegexPattern, RegexOptions.Compiled | RegexOptions.Singleline);
+    private static readonly Regex ParseRequest = new(RequestRegexPattern, RegexOptions.Compiled | RegexOptions.Singleline, TimeSpan.FromSeconds(5));
 #endif
     private static readonly ConcurrentDictionary<object, string> MethodNameCache = new();
 

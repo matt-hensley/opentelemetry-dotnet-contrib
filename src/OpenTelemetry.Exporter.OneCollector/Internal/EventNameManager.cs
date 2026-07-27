@@ -146,8 +146,8 @@ internal sealed partial class EventNameManager
 #else
 
 #pragma warning disable SA1201 // A field should not follow a method
-    private static readonly Regex EventNamespaceValidationRegexField = new(@"^[A-Za-z](?:\.?[A-Za-z0-9]+?)*$", RegexOptions.Compiled);
-    private static readonly Regex EventNameValidationRegexField = new(@"^[A-Za-z][A-Za-z0-9]*$", RegexOptions.Compiled);
+    private static readonly Regex EventNamespaceValidationRegexField = new(@"^[A-Za-z](?:\.?[A-Za-z0-9]+?)*$", RegexOptions.Compiled, TimeSpan.FromSeconds(5));
+    private static readonly Regex EventNameValidationRegexField = new(@"^[A-Za-z][A-Za-z0-9]*$", RegexOptions.Compiled, TimeSpan.FromSeconds(5));
 #pragma warning restore SA1201 // A field should not follow a method
 
     private static Regex EventNamespaceValidationRegex() => EventNamespaceValidationRegexField;
