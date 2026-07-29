@@ -100,11 +100,7 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
 
         // Try to reuse a session for all activities created under the same TraceId+SpanId.
         var cacheKey = (parent.TraceId, parent.SpanId);
-        if (!this.Cache.TryGetValue(cacheKey, out var session))
-        {
-            session = (parent, new ProfilingSession());
-            this.Cache.TryAdd(cacheKey, session);
-        }
+        var session = this.Cache.GetOrAdd(cacheKey, _ => (parent, new ProfilingSession()));
 
         return session.Session;
     };
