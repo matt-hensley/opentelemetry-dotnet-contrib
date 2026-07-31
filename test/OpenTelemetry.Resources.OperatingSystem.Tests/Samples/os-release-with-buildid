@@ -1,0 +1,6 @@
+NAME='Fedora Linux'
+VERSION='39 (Workstation Edition)'
+VERSION_ID='39'
+BUILD_ID='39.20231001.0'
+ID=fedora
+HOME_URL="https://fedoraproject.org/"
