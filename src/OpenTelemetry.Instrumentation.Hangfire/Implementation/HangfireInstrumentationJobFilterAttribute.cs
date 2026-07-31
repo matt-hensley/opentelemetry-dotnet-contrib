@@ -61,8 +61,9 @@ internal sealed class HangfireInstrumentationJobFilterAttribute : JobFilterAttri
                         return;
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    HangfireInstrumentationEventSource.Log.FilterException(ex);
                     SuppressAndDisposeActivity(activity);
                     return;
                 }

@@ -68,9 +68,9 @@ internal class TraceContextEnrichedServiceRemotingClientAdapter : IServiceRemoti
                 {
                     ServiceFabricRemotingActivitySource.Options?.EnrichAtClientFromRequest?.Invoke(activity, requestMessage);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // TODO: Log error
+                    ServiceFabricRemotingEventSource.Log.EnrichmentException(ex);
                 }
 
                 try
@@ -94,9 +94,9 @@ internal class TraceContextEnrichedServiceRemotingClientAdapter : IServiceRemoti
                     {
                         ServiceFabricRemotingActivitySource.Options?.EnrichAtClientFromResponse?.Invoke(activity, responseMessage, /* exception */ null);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        // TODO: Log error
+                        ServiceFabricRemotingEventSource.Log.EnrichmentException(ex);
                     }
                 }
 
@@ -117,9 +117,9 @@ internal class TraceContextEnrichedServiceRemotingClientAdapter : IServiceRemoti
                     {
                         ServiceFabricRemotingActivitySource.Options?.EnrichAtClientFromResponse?.Invoke(activity, /* serviceRemotingResponseMessage */ null, ex);
                     }
-                    catch (Exception)
+                    catch (Exception enrichEx)
                     {
-                        // TODO: Log error
+                        ServiceFabricRemotingEventSource.Log.EnrichmentException(enrichEx);
                     }
                 }
 
