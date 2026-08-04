@@ -1,0 +1,31 @@
+file_format: definition/2
+
+imports:
+  spans:
+    - span.db.sql_server.client
+
+attribute_groups:
+  - id: component.sqlclient.common
+    visibility: internal
+    attributes:
+      - ref: db.system.name
+      - ref: db.namespace
+      - ref: db.operation.name
+      - ref: server.address
+      - ref: server.port
+
+  - id: component.sqlclient.span
+    visibility: internal
+    attributes:
+      - ref_group: component.sqlclient.common
+      - ref: db.query.text
+      - ref: db.query.summary
+      - ref: db.stored_procedure.name
+      - ref: db.response.status_code
+      - ref: error.type
+
+span_refinements:
+  - id: component.sqlclient.span
+    ref: db.sql_server.client
+    attributes:
+      - ref_group: component.sqlclient.span

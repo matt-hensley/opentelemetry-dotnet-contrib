@@ -1,0 +1,10 @@
+name: OpenTelemetry.Instrumentation.Process
+description: Semantic Conventions implemented by OpenTelemetry.Instrumentation.Process
+schema_url: https://opentelemetry.io/schemas/dotnet-contrib/process/1.0.0
+metadata:
+  component_owners:
+    - Yun-Ting
+dependencies:
+  - name: otel
+    schema_url: https://opentelemetry.io/schemas/1.41.0
+    registry_path: https://github.com/open-telemetry/semantic-conventions@v1.41.0[model]

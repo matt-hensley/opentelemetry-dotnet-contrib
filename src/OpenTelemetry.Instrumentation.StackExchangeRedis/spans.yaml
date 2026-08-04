@@ -1,0 +1,42 @@
+file_format: definition/2
+
+imports:
+  spans:
+    - span.db.redis.client
+
+attributes:
+  - key: db.redis.database_index
+    stability: development
+    type: int
+    brief: Redis logical database index.
+
+attribute_groups:
+  - id: component.redis.client
+    visibility: internal
+    attributes:
+      - ref: db.system.name
+      - ref: db.namespace
+      - ref: db.operation.name
+      - ref: db.query.text
+      - ref: server.address
+      - ref: server.port
+      - ref: network.peer.address
+      - ref: network.peer.port
+
+  - id: component.redis.client.legacy
+    visibility: internal
+    attributes:
+      - ref: db.system
+      - ref: db.statement
+      - ref: db.redis.database_index
+
+span_refinements:
+  - id: component.redis.client
+    ref: db.redis.client
+    attributes:
+      - ref_group: component.redis.client
+
+  - id: component.redis.client.legacy
+    ref: db.redis.client
+    attributes:
+      - ref_group: component.redis.client.legacy

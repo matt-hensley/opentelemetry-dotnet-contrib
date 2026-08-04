@@ -1,0 +1,25 @@
+file_format: definition/2
+
+imports:
+  metrics:
+    - metric.db.client.operation.duration
+
+attribute_groups:
+  - id: component.sqlclient.metric
+    visibility: internal
+    attributes:
+      - ref: db.system.name
+      - ref: db.namespace
+      - ref: db.operation.name
+      - ref: db.query.summary
+      - ref: db.stored_procedure.name
+      - ref: db.response.status_code
+      - ref: error.type
+      - ref: server.address
+      - ref: server.port
+
+metric_refinements:
+  - id: component.sqlclient.duration
+    ref: db.client.operation.duration
+    attributes:
+      - ref_group: component.sqlclient.metric

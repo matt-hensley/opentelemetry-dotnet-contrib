@@ -1,0 +1,10 @@
+name: OpenTelemetry.Instrumentation.SqlClient
+description: Semantic Conventions implemented by OpenTelemetry.Instrumentation.SqlClient
+schema_url: https://opentelemetry.io/schemas/dotnet-contrib/sqlclient/1.0.0
+metadata:
+  component_owners:
+    - matt-hensley
+dependencies:
+  - name: otel
+    schema_url: https://opentelemetry.io/schemas/1.41.0
+    registry_path: https://github.com/open-telemetry/semantic-conventions@v1.41.0[model]

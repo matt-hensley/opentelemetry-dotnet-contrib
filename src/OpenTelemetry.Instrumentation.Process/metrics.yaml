@@ -1,0 +1,29 @@
+file_format: definition/2
+
+imports:
+  metrics:
+    - metric.process.cpu.time
+    - metric.process.memory.usage
+    - metric.process.memory.virtual
+    - metric.process.thread.count
+
+attribute_groups:
+  - id: component.process.cpu.time
+    visibility: internal
+    attributes:
+      - ref: process.cpu.state
+
+metric_refinements:
+  - id: component.process.cpu.time
+    ref: process.cpu.time
+    attributes:
+      - ref_group: component.process.cpu.time
+
+  - id: component.process.memory.usage
+    ref: process.memory.usage
+
+  - id: component.process.memory.virtual
+    ref: process.memory.virtual
+
+  - id: component.process.thread.count
+    ref: process.thread.count

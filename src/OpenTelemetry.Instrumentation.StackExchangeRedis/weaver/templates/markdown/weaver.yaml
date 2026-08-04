@@ -1,5 +1,0 @@
-templates:
-  - template: registry.md.j2
-    filter: "."
-    application_mode: single
-    file_name: registry.md
